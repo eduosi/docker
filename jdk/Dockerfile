@@ -4,8 +4,8 @@ FROM alpine:3.9
 # maintainer
 MAINTAINER Yong.Teng eduosi@163.com
 
-RUN echo "https://mirrors.aliyun.com/alpine/v3.9/main" > /etc/apk/repositories	\
-	&& echo "https://mirrors.aliyun.com/alpine/v3.9/community" >> /etc/apk/repositories
+RUN echo "http://mirrors.aliyun.com/alpine/v3.9/main" > /etc/apk/repositories	\
+	&& echo "http://mirrors.aliyun.com/alpine/v3.9/community" >> /etc/apk/repositories
 
 ENV LANG=zh_CN.UTF-8
 ENV TIME_ZONE=Asia/Shanghai
