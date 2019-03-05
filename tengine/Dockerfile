@@ -4,22 +4,18 @@ FROM alpine:3.9
 # maintainer
 MAINTAINER Yong.Teng eduosi@163.com
 
-RUN echo "http://mirrors.aliyun.com/alpine/v3.9/main" > /etc/apk/repositories	\
-	&& echo "http://mirrors.aliyun.com/alpine/v3.9/community" >> /etc/apk/repositories
-
 ENV TIME_ZONE=Asia/Shanghai
 
 RUN set -x \
+	&& echo "http://mirrors.aliyun.com/alpine/v3.9/main" > /etc/apk/repositories	\
+	&& echo "http://mirrors.aliyun.com/alpine/v3.9/community" >> /etc/apk/repositories \
 	&& apk update \
 	&& apk upgrade \
 	&& apk add --no-cache -U bash \
 	&& apk add --no-cache -U tzdata \
 	&& apk add --no-cache -U geoip \
-	&& apk add --no-cache -U geoip-dev \
 	&& apk add --no-cache -U lua \
-	&& apk add --no-cache -U lua5.1-dev \
 	&& apk add --no-cache -U luajit \
-	&& apk add --no-cache -U luajit-dev	\
 	&& rm -rR /var/cache/apk/*
 
 RUN cp /usr/share/zoneinfo/$TIME_ZONE /etc/localtime \
