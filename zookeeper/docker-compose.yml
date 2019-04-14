@@ -1,0 +1,53 @@
+version: '3'
+services:
+  zookeeper-node1:
+    image: eduosi/zookeeper
+    restart: always
+    container_name: zookeeper-node1
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.101
+    ports:
+      - "12181:2181"
+      - "12888:2888"
+      - "13888:3888"
+    environment:
+      ZOO_MY_ID: 101
+      ZOO_SERVERS: server.101=zookeeper-node1:2888:3888 server.102=zookeeper-node2:2888:3888 server.103=zookeeper-node3:2888:3888
+    volumes:
+      - /Users/tengyong/Documents/data/zookeeper/node1:/data/zookeeper
+  zookeeper-node2:
+    image: eduosi/zookeeper
+    restart: always
+    container_name: zookeeper-node2
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.102
+    ports:
+      - "22181:2181"
+      - "22888:2888"
+      - "23888:3888"
+    environment:
+      ZOO_MY_ID: 102
+      ZOO_SERVERS: server.101=zookeeper-node1:2888:3888 server.102=zookeeper-node2:2888:3888 server.103=zookeeper-node3:2888:3888
+    volumes:
+      - /Users/tengyong/Documents/data/zookeeper/node2:/data/zookeeper
+  zookeeper-node3:
+    image: eduosi/zookeeper
+    restart: always
+    container_name: zookeeper-node3
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.103
+    ports:
+      - "32181:2181"
+      - "32888:2888"
+      - "33888:3888"
+    environment:
+      ZOO_MY_ID: 103
+      ZOO_SERVERS: server.101=zookeeper-node1:2888:3888 server.102=zookeeper-node2:2888:3888 server.103=zookeeper-node3:2888:3888
+    volumes:
+      - /Users/tengyong/Documents/data/zookeeper/node3:/data/zookeeper
+networks:
+  static_network:
+    external: true

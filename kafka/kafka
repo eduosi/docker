@@ -1,0 +1,264 @@
+#!/bin/sh
+
+set -e
+
+source /etc/profile
+
+USER=`whoami`
+HOST=`hostname -s`
+IP=`hostname -i`
+
+BROKER_ID=1
+CONF_DIR="/usr/local/kafka/config"
+LISTENER_HOST="0.0.0.0"
+LISTENER_PORT=9092
+ADVERTISED_HOST=$IP
+ADVERTISED_PORT=9092
+
+NETWORK_THREADS=2
+IO_THREADS=2
+SOCKET_SEND_BUFFER=102400
+SOCKET_RECEIVE_BUFFER=102400
+SOCKET_REQUEST_MAX=104857600
+MESSAGE_MAX=5242880
+REPLICA_FETCH_MAX=5242880
+PARTITIONS_NUM=1
+DEFAULT_REPLICATION_FACTOR=1
+OFFSETS_TOPIC_REPLICATION_FACTOR=1
+TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+LOG_FLUSH_INTERVAL_MESSAGES=10000
+LOG_FLUSH_INTERVAL=1000
+LOG_REPLICATION_HOURS=168
+ZOOKEEPER="127.0.0.1:2181"
+ZOOKEEPER_CONNECT_TIMEOUT=6000
+HEAP="-Xmx1G -Xms1G"
+LOG_LEVEL="INFO"
+
+function create_config() {
+    sed -i "s/broker.id=\d*/broker.id=$BROKER_ID/g" $CONFIG_FILE
+
+    sed -i "s/advertised.listeners=PLAINTEXT:\/\/127.0.0.1:9092/advertised.listeners=PLAINTEXT:\/\/$ADVERTISED_HOST:$ADVERTISED_PORT/g" $CONFIG_FILE
+    sed -i "s/listeners=PLAINTEXT:\/\/127.0.0.1:9092/listeners=PLAINTEXT:\/\/$LISTENER_HOST:$LISTENER_PORT/g" $CONFIG_FILE
+
+    sed -i "s/num.network.threads=\d*/num.network.threads=$NETWORK_THREADS/g" $CONFIG_FILE
+    sed -i "s/num.io.threads=\d*/num.io.threads=$IO_THREADS/g" $CONFIG_FILE
+
+    sed -i "s/socket.send.buffer.bytes=\d*/socket.send.buffer.bytes=$SOCKET_SEND_BUFFER/g" $CONFIG_FILE
+    sed -i "s/socket.receive.buffer.bytes=\d*/socket.receive.buffer.bytes=$SOCKET_RECEIVE_BUFFER/g" $CONFIG_FILE
+    sed -i "s/socket.request.max.bytes=\d*/socket.request.max.bytes=$SOCKET_REQUEST_MAX/g" $CONFIG_FILE
+
+    sed -i "s/message.max.byte=\d*/message.max.byte=$MESSAGE_MAX/g" $CONFIG_FILE
+    sed -i "s/replica.fetch.max.bytes=\d*/replica.fetch.max.bytes=$REPLICA_FETCH_MAX/g" $CONFIG_FILE
+
+    sed -i "s/num.partitions=\d*/num.partitions=$PARTITIONS_NUM/g" $CONFIG_FILE
+    sed -i "s/default.replication.factor=\d*/default.replication.factor=$DEFAULT_REPLICATION_FACTOR/g" $CONFIG_FILE
+
+    sed -i "s/offsets.topic.replication.factor=\d*/offsets.topic.replication.factor=$OFFSETS_TOPIC_REPLICATION_FACTOR/g" $CONFIG_FILE
+    sed -i "s/transaction.state.log.replication.factor=\d*/transaction.state.log.replication.factor=$TRANSACTION_STATE_LOG_REPLICATION_FACTOR/g" $CONFIG_FILE
+    sed -i "s/log.flush.interval.messages=\d*/log.flush.interval.messages=$LOG_FLUSH_INTERVAL_MESSAGES/g" $CONFIG_FILE
+    sed -i "s/log.flush.interval.ms=\d*/log.flush.interval.ms=$LOG_FLUSH_INTERVAL/g" $CONFIG_FILE
+    sed -i "s/log.retention.hours=\d*/log.retention.hours=$OFFSETS_TOPIC_REPLICATION_FACTOR/g" $CONFIG_FILE
+
+    sed -i "s/zookeeper.connect=127.0.0.1:2181/zookeeper.connect=$ZOOKEEPER/g" $CONFIG
+    sed -i "s/zookeeper.connection.timeout.ms=\d*/zookeeper.connection.timeout.ms=$ZOOKEEPER_CONNECT_TIMEOUT/g" $CONFIG_FILE
+
+    cat $CONFIG_FILE >&2
+}
+
+function create_jvm_props() {
+    KAFKA_HEAP_OPTS=$HEAP
+}
+
+function create_log_props() {
+    mkdir -p /var/log/kafka
+    chown kafka:kafka -fR /var/log/kafka
+}
+
+function start() {
+    exec /usr/local/kafka/bin/kafka-server-start.sh /usr/local/kafka/config/server.properties
+}
+
+function usage() {
+echo "\
+Usage: kafka [OPTIONS]
+Starts a Kafka server based on the supplied options.
+    --host                                      The listener host of servers in the ensemble.
+                                                The default value is "$LISTENER_HOST".
+
+    --port                                      The listener port of servers in the ensemble.
+                                                The default value is "$LISTENER_PORT".
+
+    --advertised_host                           The hostname the broker will advertise to producers 
+                                                and consumers. The default is "$ADVERTISED_HOST".
+
+    --advertised_port                           The port the broker will advertise to producers 
+                                                and consumers. The default is "$ADVERTISED_PORT".
+
+    --network_threads                           The number of threads that the server 
+                                                uses for receiving requests from the network 
+                                                and sending responses to the network.
+                                                The default is "$NETWORK_THREADS".
+
+    --io_threads                                The number of threads that the server 
+                                                uses for processing requests, which may 
+                                                include disk I/O. The default is "$IO_THREADS".
+
+    --socket_send_buffer                        The send buffer used by the socket server.
+                                                The default is "$SOCKET_SEND_BUFFER".
+
+    --socket_receive_buffer                     The receive buffer used by the socket server.
+                                                The default is "$SOCKET_RECEIVE_BUFFER".
+
+    --socket_request_max                        The maximum size of a request that the socket server 
+                                                will accept (protection against OOM). The 
+                                                default is "$SOCKET_REQUEST_MAX". 
+
+    --message_max                               The maximum size of message for save. The 
+                                                default is "$CLIENT_PORT".
+
+    --replica_fetch_max                         The number of byes of messages to attempt to fetch 
+                                                for each partition in the fetch requests the replicas 
+                                                send to the leader. The default is "$REPLICA_FETCH_MAX".
+
+    --partitions_num                            The number of partition for topic.
+                                                The default is "$PARTITIONS_NUM".
+
+    --default_replication_factor                Default number of copies. The default is "$DEFAULT_REPLICATION_FACTOR".
+
+    --offsets_topic_replication_factor          The replication factor for the offset commit topic. 
+                                                A higher setting (e.g., three or four) is recommended 
+                                                in order to ensure higher availability. If the offsets 
+                                                topic is created when fewer brokers than 
+                                                the replication factor then the offsets topic 
+                                                will be created with fewer replicas.
+                                                The default is "$OFFSETS_TOPIC_REPLICATION_FACTOR".
+
+    --transaction_state_log_replication_factor  . The default is "$TRANSACTION_STATE_LOG_REPLICATION_FACTOR".
+
+    --log_flush_interval_messages               The number of messages to accept before forcing 
+                                                a flush of data to disk. The default is "$LOG_FLUSH_INTERVAL_MESSAGES".
+
+    --log_flush_interval                        The maximum amount of time a message can sit in a log 
+                                                before we force a flush. The default is "$LOG_FLUSH_INTERVAL".
+
+    --log_retention_hours                       The minimum age of a log file to be eligible 
+                                                for deletion due to age. The default is "$LOG_REPLICATION_HOURS".
+
+    --zookeeper                                 Zookeeper connection string. This is a comma separated host:port pairs, 
+                                                each corresponding to a zookeeper server.
+                                                The default is "$ZOOKEEPER".
+
+    --zookeeper_connect_timeout                 Timeout in ms for connecting to zookeeper.
+                                                The default is "$ZOOKEEPER_CONNECT_TIMEOUT".
+
+    --heap                                      The maximum amount of heap to use. The format is the 
+                                                same as that used for the Xmx and Xms parameters to the 
+                                                JVM. e.g. --heap='-Xmx1G -Xms1G'. The default is "$HEAP".
+
+    --log_level                                 The log level for the kafka server. Either FATAL,
+                                                ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
+"
+}
+
+optspec=":hv-:"
+while getopts "$optspec" optchar; do
+    case "${optchar}" in
+        -)
+            case "${OPTARG}" in
+                host=*)
+                    LISTENER_HOST=${OPTARG##*=}
+                    ;;
+                port=*)
+                    LISTENER_PORT=${OPTARG##*=}
+                    ;;
+                advertised_host=*)
+                    ADVERTISED_HOST=${OPTARG##*=}
+                    ;;
+                advertised_port=*)
+                    ADVERTISED_PORT=${OPTARG##*=}
+                    ;;
+                network_threads=*)
+                    NETWORK_THREADS=${OPTARG##*=}
+                    ;;
+                io_threads=*)
+                    IO_THREADS=${OPTARG##*=}
+                    ;;
+                socket_send_buffer=*)
+                    SOCKET_SEND_BUFFER=${OPTARG##*=}
+                    ;;
+                socket_receive_buffer=*)
+                    SOCKET_RECEIVE_BUFFER=${OPTARG##*=}
+                    ;;
+                socket_request_max=*)
+                    SOCKET_REQUEST_MAX=${OPTARG##*=}
+                    ;;
+                message_max=*)
+                    MESSAGE_MAX=${OPTARG##*=}
+                    ;;
+                replica_fetch_max=*)
+                    REPLICA_FETCH_MAX=${OPTARG##*=}
+                    ;;
+                partitions_num=*)
+                    PARTITIONS_NUM=${OPTARG##*=}
+                    ;;
+                default_replication_factor=*)
+                    DEFAULT_REPLICATION_FACTOR=${OPTARG##*=}
+                    ;;
+                offsets_topic_replication_factor=*)
+                    OFFSETS_TOPIC_REPLICATION_FACTOR=${OPTARG##*=}
+                    ;;
+                transaction_state_log_replication_factor=*)
+                    TRANSACTION_STATE_LOG_REPLICATION_FACTOR=${OPTARG##*=}
+                    ;;
+                log_flush_interval_messages=*)
+                    LOG_FLUSH_INTERVAL_MESSAGES=${OPTARG##*=}
+                    ;;
+                log_flush_interval=*)
+                    LOG_FLUSH_INTERVAL=${OPTARG##*=}
+                    ;;
+                log_retention_hours=*)
+                    LOG_REPLICATION_HOURS=${OPTARG##*=}
+                    ;;
+                zookeeper=*)
+                    ZOOKEEPER=${OPTARG##*=}
+                    ;;
+                zookeeper_connect_timeout=*)
+                    ZOOKEEPER_CONNECT_TIMEOUT=${OPTARG##*=}
+                    ;;
+                head=*)
+                    HEAP=${OPTARG##*=}
+                    ;;
+                log_level=*)
+                    LOG_LEVEL=${OPTARG##*=}
+                    ;;
+                *)
+                    echo "Unknown option --${OPTARG}" >&2
+                    exit 1
+                    ;;
+            esac;;
+        h)
+            usage
+            exit
+            ;;
+        v)
+            echo "Parsing option: '-${optchar}'" >&2
+            ;;
+        *)
+            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                echo "Non-option argument: '-${OPTARG}'" >&2
+            fi
+            ;;
+    esac
+done
+
+CONFIG_FILE="$CONF_DIR/server.properties"
+if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
+    ORD=${BASH_REMATCH[2]}
+else
+    echo "Fialed to parse name and ordinal of Pod"
+    exit 1
+fi
+
+BROKER_ID=$((ORD+1))
+
+create_config && create_jvm_props && create_log_props && start

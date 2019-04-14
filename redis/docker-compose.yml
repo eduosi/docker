@@ -1,0 +1,16 @@
+version: '2'
+services:
+  redis-server:
+    image: eduosi/redis
+    restart: always
+    container_name: redis-server
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.100
+    ports:
+      - "6379:6379"
+    volumes:
+      - /Users/tengyong/Documents/data/redis:/data/redis
+networks:
+  static_network:
+    external: true

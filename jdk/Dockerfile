@@ -5,7 +5,8 @@ FROM alpine:3.9
 MAINTAINER Yong.Teng eduosi@163.com
 
 ENV LANG=zh_CN.UTF-8 TIME_ZONE=Asia/Shanghai
-ENV JAVA_HOME=/usr/local/jdk CLASSPATH=.:$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib/dt.jar PATH=${PATH}:${JAVA_HOME}/bin
+ENV JAVA_HOME=/usr/local/jdk CLASSPATH=.:$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib/dt.jar
+ENV PATH=${PATH}:${JAVA_HOME}/bin
 
 COPY glibc-2.29 ./glibc-2.29
 COPY jdk1.8.0_202 usr/local/jdk
