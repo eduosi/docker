@@ -3,11 +3,14 @@ kind: StatefulSet
 metadata:
   name: zookeeper
 spec:
-  serviceName: zookeeper
+  serviceName: zookeeper-ha
   replicas: 3
   selector:
     matchLabels:
       app: zookeeper
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
   template: 
     metadata:
       labels:
@@ -30,7 +33,25 @@ spec:
           command:
             - "sh"
             - "-c"
-            - "zookeeper --servers=3 --conf_dir=/usr/local/zookeeper/conf --data_dir=/data/zookeeper/data --data_log_dir=/data/zookeeper/log --server_port=2888 --client_port=2181 --leader_election_port=3888 --init_limit=10 --tick_time=2000 --sync_limit=5 --heap=512M --max_client_cnxns=100 --snap_retain_count=3 --purge_interval=12 --max_session_timeout=40000 --min_session_timeout=4000 --log_level=INFO"
+            - "zookeeper \
+              start \
+              --servers=3 \
+              --conf_dir=/usr/local/zookeeper/conf \
+              --data_dir=/data/zookeeper/data \
+              --data_log_dir=/data/zookeeper/log \
+              --server_port=2888 \
+              --client_port=2181 \
+              --leader_election_port=3888 \
+              --init_limit=10 \
+              --tick_time=2000 \
+              --sync_limit=5 \
+              --max_client_cnxns=100 \
+              --snap_retain_count=3 \
+              --purge_interval=12 \
+              --max_session_timeout=40000 \
+              --min_session_timeout=4000 \
+              --heap=512M \
+              --log_level=INFO"
           ports:
             - containerPort: 2181
               name: client
@@ -47,7 +68,7 @@ spec:
               command:
                 - "sh"
                 - "-c"
-                - "zookeeper-monitor 2181"
+                - "zookeeper healthcheck --port=2181"
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
@@ -58,7 +79,7 @@ spec:
               command:
                 - "sh"
                 - "-c"
-                - "zookeeper-monitor 2181"
+                - "zookeeper healthcheck --port=2181"
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
@@ -83,6 +104,17 @@ spec:
     - name: client
       port: 2181
       targetPort: 2181
+  selector:
+    app: zookeeper
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-ha
+  labels:
+    name: zookeeper
+spec:
+  ports:
     - name: server
       protocol: "TCP"
       port: 2888
@@ -91,5 +123,16 @@ spec:
       protocol: "TCP"
       port: 3888
       targetPort: 3888
+  clusterIP: None
   selector:
     app: zookeeper
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: zookeeper-pdb
+spec:
+  selector:
+    matchLabels:
+      app: zookeeper
+  maxUnavailable: 1

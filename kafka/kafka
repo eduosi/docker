@@ -1,22 +1,23 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
-source /etc/profile
-
 USER=`whoami`
 HOST=`hostname -s`
+DOMAIN=`hostname -d`
 IP=`hostname -i`
 
 BROKER_ID=1
-CONF_DIR="/usr/local/kafka/config"
+BASE_DIR="/usr/local/kafka"
+CONF_DIR="$BASE_DIR/config"
+LOG_DIR="/var/log/kafka"
 LISTENER_HOST="0.0.0.0"
 LISTENER_PORT=9092
 ADVERTISED_HOST=$IP
 ADVERTISED_PORT=9092
 
 NETWORK_THREADS=2
-IO_THREADS=2
+IO_THREADS=8
 SOCKET_SEND_BUFFER=102400
 SOCKET_RECEIVE_BUFFER=102400
 SOCKET_REQUEST_MAX=104857600
@@ -35,32 +36,175 @@ HEAP="-Xmx1G -Xms1G"
 LOG_LEVEL="INFO"
 
 function create_config() {
-    sed -i "s/broker.id=\d*/broker.id=$BROKER_ID/g" $CONFIG_FILE
+    rm -f $CONFIG_FILE
 
-    sed -i "s/advertised.listeners=PLAINTEXT:\/\/127.0.0.1:9092/advertised.listeners=PLAINTEXT:\/\/$ADVERTISED_HOST:$ADVERTISED_PORT/g" $CONFIG_FILE
-    sed -i "s/listeners=PLAINTEXT:\/\/127.0.0.1:9092/listeners=PLAINTEXT:\/\/$LISTENER_HOST:$LISTENER_PORT/g" $CONFIG_FILE
+    echo "# Licensed to the Apache Software Foundation (ASF) under one or more" >> $CONFIG_FILE
+    echo "# contributor license agreements.  See the NOTICE file distributed with" >> $CONFIG_FILE
+    echo "# this work for additional information regarding copyright ownership." >> $CONFIG_FILE
+    echo "# The ASF licenses this file to You under the Apache License, Version 2.0" >> $CONFIG_FILE
+    echo "# (the "License"); you may not use this file except in compliance with" >> $CONFIG_FILE
+    echo "# the License.  You may obtain a copy of the License at" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "#    http://www.apache.org/licenses/LICENSE-2.0" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Unless required by applicable law or agreed to in writing, software" >> $CONFIG_FILE
+    echo "# distributed under the License is distributed on an "AS IS" BASIS," >> $CONFIG_FILE
+    echo "# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied." >> $CONFIG_FILE
+    echo "# See the License for the specific language governing permissions and" >> $CONFIG_FILE
+    echo "# limitations under the License." >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/num.network.threads=\d*/num.network.threads=$NETWORK_THREADS/g" $CONFIG_FILE
-    sed -i "s/num.io.threads=\d*/num.io.threads=$IO_THREADS/g" $CONFIG_FILE
+    echo "# see kafka.server.KafkaConfig for additional details and defaults" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/socket.send.buffer.bytes=\d*/socket.send.buffer.bytes=$SOCKET_SEND_BUFFER/g" $CONFIG_FILE
-    sed -i "s/socket.receive.buffer.bytes=\d*/socket.receive.buffer.bytes=$SOCKET_RECEIVE_BUFFER/g" $CONFIG_FILE
-    sed -i "s/socket.request.max.bytes=\d*/socket.request.max.bytes=$SOCKET_REQUEST_MAX/g" $CONFIG_FILE
+    echo "############################# Server Basics #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/message.max.byte=\d*/message.max.byte=$MESSAGE_MAX/g" $CONFIG_FILE
-    sed -i "s/replica.fetch.max.bytes=\d*/replica.fetch.max.bytes=$REPLICA_FETCH_MAX/g" $CONFIG_FILE
+    echo "# The id of the broker. This must be set to a unique integer for each broker." >> $CONFIG_FILE
+    echo "broker.id=$BROKER_ID" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/num.partitions=\d*/num.partitions=$PARTITIONS_NUM/g" $CONFIG_FILE
-    sed -i "s/default.replication.factor=\d*/default.replication.factor=$DEFAULT_REPLICATION_FACTOR/g" $CONFIG_FILE
+    echo "############################# Socket Server Settings #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# The address the socket server listens on. It will get the value returned from " >> $CONFIG_FILE
+    echo "# java.net.InetAddress.getCanonicalHostName() if not configured." >> $CONFIG_FILE
+    echo "#   FORMAT:" >> $CONFIG_FILE
+    echo "#     listeners = listener_name://host_name:port" >> $CONFIG_FILE
+    echo "#   EXAMPLE:" >> $CONFIG_FILE
+    echo "#     listeners = PLAINTEXT://your.host.name:9092" >> $CONFIG_FILE
+    echo "listeners=PLAINTEXT://$LISTENER_HOST:$LISTENER_PORT" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/offsets.topic.replication.factor=\d*/offsets.topic.replication.factor=$OFFSETS_TOPIC_REPLICATION_FACTOR/g" $CONFIG_FILE
-    sed -i "s/transaction.state.log.replication.factor=\d*/transaction.state.log.replication.factor=$TRANSACTION_STATE_LOG_REPLICATION_FACTOR/g" $CONFIG_FILE
-    sed -i "s/log.flush.interval.messages=\d*/log.flush.interval.messages=$LOG_FLUSH_INTERVAL_MESSAGES/g" $CONFIG_FILE
-    sed -i "s/log.flush.interval.ms=\d*/log.flush.interval.ms=$LOG_FLUSH_INTERVAL/g" $CONFIG_FILE
-    sed -i "s/log.retention.hours=\d*/log.retention.hours=$OFFSETS_TOPIC_REPLICATION_FACTOR/g" $CONFIG_FILE
+    echo "# Hostname and port the broker will advertise to producers and consumers. If not set, " >> $CONFIG_FILE
+    echo "# it uses the value for "listeners" if configured.  Otherwise, it will use the value" >> $CONFIG_FILE
+    echo "# returned from java.net.InetAddress.getCanonicalHostName()." >> $CONFIG_FILE
+    echo "advertised.listeners=PLAINTEXT://$ADVERTISED_HOST:$ADVERTISED_PORT" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
 
-    sed -i "s/zookeeper.connect=127.0.0.1:2181/zookeeper.connect=$ZOOKEEPER/g" $CONFIG
-    sed -i "s/zookeeper.connection.timeout.ms=\d*/zookeeper.connection.timeout.ms=$ZOOKEEPER_CONNECT_TIMEOUT/g" $CONFIG_FILE
+    echo "# Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details" >> $CONFIG_FILE
+    echo "#listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The number of threads that the server uses for receiving requests from the network and sending responses to the network" >> $CONFIG_FILE
+    echo "num.network.threads=$NETWORK_THREADS" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The number of threads that the server uses for processing requests, which may include disk I/O" >> $CONFIG_FILE
+    echo "num.io.threads=$IO_THREADS" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The send buffer (SO_SNDBUF) used by the socket server" >> $CONFIG_FILE
+    echo "socket.send.buffer.bytes=$SOCKET_SEND_BUFFER" >> $CONFIG_FILE
+
+    echo "# The receive buffer (SO_RCVBUF) used by the socket server" >> $CONFIG_FILE
+    echo "socket.receive.buffer.bytes=$SOCKET_RECEIVE_BUFFER" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The maximum size of a request that the socket server will accept (protection against OOM)" >> $CONFIG_FILE
+    echo "socket.request.max.bytes=$SOCKET_REQUEST_MAX" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "message.max.byte=$MESSAGE_MAX" >> $CONFIG_FILE
+    echo "replica.fetch.max.bytes=$REPLICA_FETCH_MAX" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "############################# Log Basics #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# A comma separated list of directories under which to store log files" >> $CONFIG_FILE
+    echo "log.dirs=$LOG_DIR" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The default number of log partitions per topic. More partitions allow greater" >> $CONFIG_FILE
+    echo "# parallelism for consumption, but this will also result in more files across" >> $CONFIG_FILE
+    echo "# the brokers." >> $CONFIG_FILE
+    echo "num.partitions=$PARTITIONS_NUM" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "default.replication.factor=$DEFAULT_REPLICATION_FACTOR" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The number of threads per data directory to be used for log recovery at startup and flushing at shutdown." >> $CONFIG_FILE
+    echo "# This value is recommended to be increased for installations with data dirs located in RAID array." >> $CONFIG_FILE
+    echo "num.recovery.threads.per.data.dir=1" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "############################# Internal Topic Settings  #############################" >> $CONFIG_FILE
+    echo "# The replication factor for the group metadata internal topics "__consumer_offsets" and "__transaction_state"" >> $CONFIG_FILE
+    echo "# For anything other than development testing, a value greater than 1 is recommended for to ensure availability such as 3." >> $CONFIG_FILE
+    echo "offsets.topic.replication.factor=$OFFSETS_TOPIC_REPLICATION_FACTOR" >> $CONFIG_FILE
+    echo "transaction.state.log.replication.factor=$TRANSACTION_STATE_LOG_REPLICATION_FACTOR" >> $CONFIG_FILE
+    echo "transaction.state.log.min.isr=1" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "############################# Log Flush Policy #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# Messages are immediately written to the filesystem but by default we only fsync() to sync" >> $CONFIG_FILE
+    echo "# the OS cache lazily. The following configurations control the flush of data to disk." >> $CONFIG_FILE
+    echo "# There are a few important trade-offs here:" >> $CONFIG_FILE
+    echo "#    1. Durability: Unflushed data may be lost if you are not using replication." >> $CONFIG_FILE
+    echo "#    2. Latency: Very large flush intervals may lead to latency spikes when the flush does occur as there will be a lot of data to flush." >> $CONFIG_FILE
+    echo "#    3. Throughput: The flush is generally the most expensive operation, and a small flush interval may lead to excessive seeks." >> $CONFIG_FILE
+    echo "# The settings below allow one to configure the flush policy to flush data after a period of time or" >> $CONFIG_FILE
+    echo "# every N messages (or both). This can be done globally and overridden on a per-topic basis." >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The number of messages to accept before forcing a flush of data to disk" >> $CONFIG_FILE
+    echo "log.flush.interval.messages=$LOG_FLUSH_INTERVAL_MESSAGES" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The maximum amount of time a message can sit in a log before we force a flush" >> $CONFIG_FILE
+    echo "log.flush.interval.ms=$LOG_FLUSH_INTERVAL" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "############################# Log Retention Policy #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# The following configurations control the disposal of log segments. The policy can" >> $CONFIG_FILE
+    echo "# be set to delete segments after a period of time, or after a given size has accumulated." >> $CONFIG_FILE
+    echo "# A segment will be deleted whenever *either* of these criteria are met. Deletion always happens" >> $CONFIG_FILE
+    echo "# from the end of the log." >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The minimum age of a log file to be eligible for deletion due to age" >> $CONFIG_FILE
+    echo "log.retention.hours=$LOG_REPLICATION_HOURS" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# A size-based retention policy for logs. Segments are pruned from the log unless the remaining" >> $CONFIG_FILE
+    echo "# segments drop below log.retention.bytes. Functions independently of log.retention.hours." >> $CONFIG_FILE
+    echo "log.retention.bytes=1073741824" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The maximum size of a log segment file. When this size is reached a new log segment will be created." >> $CONFIG_FILE
+    echo "log.segment.bytes=1073741824" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# The interval at which log segments are checked to see if they can be deleted according" >> $CONFIG_FILE
+    echo "# to the retention policies" >> $CONFIG_FILE
+    echo "log.retention.check.interval.ms=300000" >> $CONFIG_FILE
+
+    echo "############################# Zookeeper #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# Zookeeper connection string (see zookeeper docs for details)." >> $CONFIG_FILE
+    echo "# This is a comma separated host:port pairs, each corresponding to a zk" >> $CONFIG_FILE
+    echo '# server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002".' >> $CONFIG_FILE
+    echo "# You can also append an optional chroot string to the urls to specify the" >> $CONFIG_FILE
+    echo "# root directory for all kafka znodes." >> $CONFIG_FILE
+    echo "zookeeper.connect=$ZOOKEEPER" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "# Timeout in ms for connecting to zookeeper" >> $CONFIG_FILE
+    echo "zookeeper.connection.timeout.ms=$ZOOKEEPER_CONNECT_TIMEOUT" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+
+    echo "############################# Group Coordinator Settings #############################" >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# The following configuration specifies the time, in milliseconds, that the GroupCoordinator will delay the initial consumer rebalance." >> $CONFIG_FILE
+    echo "# The rebalance will be further delayed by the value of group.initial.rebalance.delay.ms as new members join the group, up to a maximum of max.poll.interval.ms." >> $CONFIG_FILE
+    echo "# The default value for this is 3 seconds." >> $CONFIG_FILE
+    echo "# We override this to 0 here as it makes for a better out-of-the-box experience for development and testing." >> $CONFIG_FILE
+    echo "" >> $CONFIG_FILE
+    echo "# However, in production environments the default value of 3 seconds is more suitable as this will help to avoid unnecessary, and potentially expensive, rebalances during application startup." >> $CONFIG_FILE
+    echo "group.initial.rebalance.delay.ms=0" >> $CONFIG_FILE
 
     cat $CONFIG_FILE >&2
 }
@@ -70,18 +214,74 @@ function create_jvm_props() {
 }
 
 function create_log_props() {
-    mkdir -p /var/log/kafka
-    chown kafka:kafka -fR /var/log/kafka
+    LOGGER_PROPS_FILE="$CONF_DIR/log4j.properties"
+
+    if [ ! -d $LOG_DIR  ]; then
+        mkdir -p $LOG_DIR
+    fi
+
+    #echo "Creating Kafka log4j configuration"
+    #echo "log4j.rootLogger=CONSOLE" >> $LOGGER_PROPS_FILE
+    #echo "log4j.rootLogger.console.threshold="$LOG_LEVEL >> $LOGGER_PROPS_FILE
+    #echo "log4j.rootLogger=\${kafka.root.logger}" >> $LOGGER_PROPS_FILE
+    #echo "log4j.appender.CONSOLE=org.apache.log4j.ConsoleAppender" >> $LOGGER_PROPS_FILE
+    #echo "log4j.appender.CONSOLE.Threshold=\${zookeeper.console.threshold}" >> $LOGGER_PROPS_FILE
+    #echo "log4j.appender.CONSOLE.layout=org.apache.log4j.PatternLayout" >> $LOGGER_PROPS_FILE
+    #echo "log4j.appender.CONSOLE.layout.ConversionPattern=[%d] %p %m (%c)%n" >> $LOGGER_PROPS_FILE
 }
 
 function start() {
-    exec /usr/local/kafka/bin/kafka-server-start.sh /usr/local/kafka/config/server.properties
+    CONFIG_FILE="$CONF_DIR/server.properties"
+
+    if [ "x$BROKER_ID" = "x"]; then
+        if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
+            NAME=${BASH_REMATCH[1]}
+            ORD=${BASH_REMATCH[2]}
+        else
+            echo "Fialed to parse name and ordinal of Pod, hostname is $HOST."
+            exit 1
+        fi
+
+        BROKER_ID=$((ORD+1))
+    fi
+
+    source /etc/profile
+
+    create_config \
+    && create_jvm_props \
+    && create_log_props
+
+    echo "Staring kafka."
+    exec $BASE_DIR/bin/kafka-server-start.sh $CONF_DIR/server.properties
+}
+
+function healthcheck() {
+    PORT="$1"
+
+    RESULT=$(echo ruok | nc 127.0.0.1 $PORT)
+    if [ "$RESULT" == "imok" ]; then
+        exit 0
+    else
+        exit 1
+    fi
 }
 
 function usage() {
+    COMMAND="$1"
+
+    ERROR_MSG="$2"
+    
+    if [ "$ERROR_MSG" != "" ]; then
+        echo -e "\nERROR: $ERROR_MSG\n"
+    fi
+
+    if [ "$COMMAND" = "start" ]; then
 echo "\
-Usage: kafka [OPTIONS]
-Starts a Kafka server based on the supplied options.
+Usage: kafka start [OPTIONS]
+Start a Kafka server based on the supplied options.
+    --broker_id                                 The id of the broker. This must be set to 
+                                                a unique integer for each broker.
+                                                The default value is 0.
     --host                                      The listener host of servers in the ensemble.
                                                 The default value is "$LISTENER_HOST".
 
@@ -128,12 +328,11 @@ Starts a Kafka server based on the supplied options.
     --offsets_topic_replication_factor          The replication factor for the offset commit topic. 
                                                 A higher setting (e.g., three or four) is recommended 
                                                 in order to ensure higher availability. If the offsets 
-                                                topic is created when fewer brokers than 
-                                                the replication factor then the offsets topic 
-                                                will be created with fewer replicas.
+                                                topic is created when fewer brokers than the replication factor 
+                                                then the offsets topic will be created with fewer replicas.
                                                 The default is "$OFFSETS_TOPIC_REPLICATION_FACTOR".
 
-    --transaction_state_log_replication_factor  . The default is "$TRANSACTION_STATE_LOG_REPLICATION_FACTOR".
+    --transaction_state_log_replication_factor  The default is "$TRANSACTION_STATE_LOG_REPLICATION_FACTOR".
 
     --log_flush_interval_messages               The number of messages to accept before forcing 
                                                 a flush of data to disk. The default is "$LOG_FLUSH_INTERVAL_MESSAGES".
@@ -155,110 +354,188 @@ Starts a Kafka server based on the supplied options.
                                                 same as that used for the Xmx and Xms parameters to the 
                                                 JVM. e.g. --heap='-Xmx1G -Xms1G'. The default is "$HEAP".
 
+    --log_dir                                   The log directory for the kafka server. 
+                                                The default is "$LOG_DIR".
+
     --log_level                                 The log level for the kafka server. Either FATAL,
                                                 ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
 "
+    elif [ "$COMMAND" = "healthcheck" ]; then
+echo "\
+Usage: kafka healthcheck [OPTIONS]
+Kafka server healthcheck based on the supplied options.
+     --port  The port of server. The default value is "$CLIENT_PORT".
+"
+    else
+        echo "\
+Usage: kafka COMMAND OPTIONS
+       where COMMAND is one of: start, healthcheck
+
+Pass --help after any COMMAND to see command-specific usage information,
+     such as:    ./kafka start --help or ./kafka healthcheck --help
+"
+fi
 }
 
-optspec=":hv-:"
-while getopts "$optspec" optchar; do
-    case "${optchar}" in
-        -)
-            case "${OPTARG}" in
-                host=*)
-                    LISTENER_HOST=${OPTARG##*=}
-                    ;;
-                port=*)
-                    LISTENER_PORT=${OPTARG##*=}
-                    ;;
-                advertised_host=*)
-                    ADVERTISED_HOST=${OPTARG##*=}
-                    ;;
-                advertised_port=*)
-                    ADVERTISED_PORT=${OPTARG##*=}
-                    ;;
-                network_threads=*)
-                    NETWORK_THREADS=${OPTARG##*=}
-                    ;;
-                io_threads=*)
-                    IO_THREADS=${OPTARG##*=}
-                    ;;
-                socket_send_buffer=*)
-                    SOCKET_SEND_BUFFER=${OPTARG##*=}
-                    ;;
-                socket_receive_buffer=*)
-                    SOCKET_RECEIVE_BUFFER=${OPTARG##*=}
-                    ;;
-                socket_request_max=*)
-                    SOCKET_REQUEST_MAX=${OPTARG##*=}
-                    ;;
-                message_max=*)
-                    MESSAGE_MAX=${OPTARG##*=}
-                    ;;
-                replica_fetch_max=*)
-                    REPLICA_FETCH_MAX=${OPTARG##*=}
-                    ;;
-                partitions_num=*)
-                    PARTITIONS_NUM=${OPTARG##*=}
-                    ;;
-                default_replication_factor=*)
-                    DEFAULT_REPLICATION_FACTOR=${OPTARG##*=}
-                    ;;
-                offsets_topic_replication_factor=*)
-                    OFFSETS_TOPIC_REPLICATION_FACTOR=${OPTARG##*=}
-                    ;;
-                transaction_state_log_replication_factor=*)
-                    TRANSACTION_STATE_LOG_REPLICATION_FACTOR=${OPTARG##*=}
-                    ;;
-                log_flush_interval_messages=*)
-                    LOG_FLUSH_INTERVAL_MESSAGES=${OPTARG##*=}
-                    ;;
-                log_flush_interval=*)
-                    LOG_FLUSH_INTERVAL=${OPTARG##*=}
-                    ;;
-                log_retention_hours=*)
-                    LOG_REPLICATION_HOURS=${OPTARG##*=}
-                    ;;
-                zookeeper=*)
-                    ZOOKEEPER=${OPTARG##*=}
-                    ;;
-                zookeeper_connect_timeout=*)
-                    ZOOKEEPER_CONNECT_TIMEOUT=${OPTARG##*=}
-                    ;;
-                head=*)
-                    HEAP=${OPTARG##*=}
-                    ;;
-                log_level=*)
-                    LOG_LEVEL=${OPTARG##*=}
-                    ;;
-                *)
-                    echo "Unknown option --${OPTARG}" >&2
-                    exit 1
-                    ;;
-            esac;;
-        h)
-            usage
-            exit
-            ;;
-        v)
-            echo "Parsing option: '-${optchar}'" >&2
-            ;;
-        *)
-            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
-                echo "Non-option argument: '-${OPTARG}'" >&2
-            fi
-            ;;
-    esac
-done
-
-CONFIG_FILE="$CONF_DIR/server.properties"
-if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
-    ORD=${BASH_REMATCH[2]}
+if [ $# -gt 0 ]; then
+    COMMAND="$1"
+    shift
 else
-    echo "Fialed to parse name and ordinal of Pod"
-    exit 1
+    usage ""
+    exit;
 fi
 
-BROKER_ID=$((ORD+1))
+if [ $COMMAND = "start" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
 
-create_config && create_jvm_props && create_log_props && start
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    broker_id=*)
+                        BROKER_ID=${OPTARG##*=}
+                        ;;
+                    host=*)
+                        LISTENER_HOST=${OPTARG##*=}
+                        ;;
+                    port=*)
+                        LISTENER_PORT=${OPTARG##*=}
+                        ;;
+                    advertised_host=*)
+                        ADVERTISED_HOST=${OPTARG##*=}
+                        ;;
+                    advertised_port=*)
+                        ADVERTISED_PORT=${OPTARG##*=}
+                        ;;
+                    network_threads=*)
+                        NETWORK_THREADS=${OPTARG##*=}
+                        ;;
+                    io_threads=*)
+                        IO_THREADS=${OPTARG##*=}
+                        ;;
+                    socket_send_buffer=*)
+                        SOCKET_SEND_BUFFER=${OPTARG##*=}
+                        ;;
+                    socket_receive_buffer=*)
+                        SOCKET_RECEIVE_BUFFER=${OPTARG##*=}
+                        ;;
+                    socket_request_max=*)
+                        SOCKET_REQUEST_MAX=${OPTARG##*=}
+                        ;;
+                    message_max=*)
+                        MESSAGE_MAX=${OPTARG##*=}
+                        ;;
+                    replica_fetch_max=*)
+                        REPLICA_FETCH_MAX=${OPTARG##*=}
+                        ;;
+                    partitions_num=*)
+                        PARTITIONS_NUM=${OPTARG##*=}
+                        ;;
+                    default_replication_factor=*)
+                        DEFAULT_REPLICATION_FACTOR=${OPTARG##*=}
+                        ;;
+                    offsets_topic_replication_factor=*)
+                        OFFSETS_TOPIC_REPLICATION_FACTOR=${OPTARG##*=}
+                        ;;
+                    transaction_state_log_replication_factor=*)
+                        TRANSACTION_STATE_LOG_REPLICATION_FACTOR=${OPTARG##*=}
+                        ;;
+                    log_flush_interval_messages=*)
+                        LOG_FLUSH_INTERVAL_MESSAGES=${OPTARG##*=}
+                        ;;
+                    log_flush_interval=*)
+                        LOG_FLUSH_INTERVAL=${OPTARG##*=}
+                        ;;
+                    log_retention_hours=*)
+                        LOG_REPLICATION_HOURS=${OPTARG##*=}
+                        ;;
+                    zookeeper=*)
+                        ZOOKEEPER=${OPTARG##*=}
+                        ;;
+                    zookeeper_connect_timeout=*)
+                        ZOOKEEPER_CONNECT_TIMEOUT=${OPTARG##*=}
+                        ;;
+                    heap=*)
+                        HEAP=${OPTARG##*=}
+                        ;;
+                    log_dir=*)
+                        LOG_DIR=${OPTARG##*=}
+                        ;;
+                    log_level=*)
+                        LOG_LEVEL=${OPTARG##*=}
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    start
+elif [ $COMMAND = "healthcheck" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
+
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    port=*)
+                        PORT=${OPTARG##*=}
+
+                        if [[ "$PORT" =~ ^[0-9]+$ ]]; then
+                            PORT=$PORT
+                        else
+                            usage "$COMMAND" "Port number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    healthcheck $PORT
+else
+    usage "" "$COMMAND is not a valid command!"
+    exit 1;
+fi

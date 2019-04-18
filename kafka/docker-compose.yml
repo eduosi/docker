@@ -7,22 +7,29 @@ services:
     network_mode: bridge
     ports:
       - "19092:9092"
+    command: "kafka start \
+              --host=0.0.0.0 \
+              --port=9092 \
+              --advertised_port=9092 \
+              --network_threads=4 \
+              --io_threads=4 \
+              --socket_send_buffer=102400 \
+              --socket_receive_buffer=102400 \
+              --socket_request_max=104857600 \
+              --message_max=5242880 \
+              --replica_fetch_max=5242880 \
+              --partitions_num=2 \
+              --default_replication_factor=2 \
+              --offsets_topic_replication_factor=2 \
+              --transaction_state_log_replication_factor=2 \
+              --log_flush_interval_messages=10000 \
+              --log_flush_interval=1000 \
+              --log_retention_hours=168 \
+              --zookeeper=10.101.0.130:31518 \
+              --zookeeper_connect_timeout=6000 \
+              --log_level=INFO"
     environment:
-      KAFKA_HEAP_OPTS: "-Xmx500M -Xmx500M"
-      KAFKA_BROKER_ID: 201
-      KAFKA_LISTENER_HOST: 0.0.0.0
-      KAFKA_ADVERTISED_HOST: 172.16.52.1
-      KAFKA_ADVERTISED_PORT: 19092
-      KAFKA_SOCKET_SEND_BUFFER: 102400
-      KAFKA_SOCKET_RECEIVE_BUFFER: 102400
-      KAFKA_SOCKET_REQUEST_MAX: 524288000
-      KAFKA_MESSAGE_MAX: 5242880
-      KAFKA_REPLICA_FETCH_MAX: 5242880
-      KAFKA_PARTITIONS_NUM: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_ZOOKEEPER: 172.16.52.1:12181,172.16.52.1:22181,172.16.52.1:32181
+      HOSTNAME: kafka-node-1
   kafka-node2:
     image: eduosi/kafka
     restart: always
@@ -30,42 +37,26 @@ services:
     network_mode: bridge
     ports:
       - "29092:9092"
+    command: "kafka start \
+              --host=0.0.0.0 \
+              --port=9092 \
+              --advertised_port=9092 \
+              --network_threads=4 \
+              --io_threads=4 \
+              --socket_send_buffer=102400 \
+              --socket_receive_buffer=102400 \
+              --socket_request_max=104857600 \
+              --message_max=5242880 \
+              --replica_fetch_max=5242880 \
+              --partitions_num=2 \
+              --default_replication_factor=2 \
+              --offsets_topic_replication_factor=2 \
+              --transaction_state_log_replication_factor=2 \
+              --log_flush_interval_messages=10000 \
+              --log_flush_interval=1000 \
+              --log_retention_hours=168 \
+              --zookeeper=10.101.0.130:31518 \
+              --zookeeper_connect_timeout=6000 \
+              --log_level=INFO"
     environment:
-      KAFKA_HEAP_OPTS: "-Xmx500M -Xmx500M"
-      KAFKA_BROKER_ID: 202
-      KAFKA_LISTENER_HOST: 0.0.0.0
-      KAFKA_ADVERTISED_HOST: 172.16.52.1
-      KAFKA_ADVERTISED_PORT: 29092
-      KAFKA_SOCKET_SEND_BUFFER: 102400
-      KAFKA_SOCKET_RECEIVE_BUFFER: 102400
-      KAFKA_SOCKET_REQUEST_MAX: 524288000
-      KAFKA_MESSAGE_MAX: 5242880
-      KAFKA_REPLICA_FETCH_MAX: 5242880
-      KAFKA_PARTITIONS_NUM: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_ZOOKEEPER: 172.16.52.1:12181,172.16.52.1:22181,172.16.52.1:32181
-  kafka-node3:
-    image: eduosi/kafka
-    restart: always
-    container_name: kafka-node3
-    network_mode: bridge
-    ports:
-      - "39092:9092"
-    environment:
-      KAFKA_HEAP_OPTS: "-Xmx500M -Xmx500M"
-      KAFKA_BROKER_ID: 203
-      KAFKA_LISTENER_HOST: 0.0.0.0
-      KAFKA_ADVERTISED_HOST: 172.16.52.1
-      KAFKA_ADVERTISED_PORT: 39092
-      KAFKA_SOCKET_SEND_BUFFER: 102400
-      KAFKA_SOCKET_RECEIVE_BUFFER: 102400
-      KAFKA_SOCKET_REQUEST_MAX: 524288000
-      KAFKA_MESSAGE_MAX: 5242880
-      KAFKA_REPLICA_FETCH_MAX: 5242880
-      KAFKA_PARTITIONS_NUM: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_ZOOKEEPER: 172.16.52.1:12181,172.16.52.1:22181,172.16.52.1:32181
+      HOSTNAME: kafka-node-2

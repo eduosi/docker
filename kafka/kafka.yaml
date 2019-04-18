@@ -1,0 +1,108 @@
+apiVersion: apps/v1beta1 
+kind: StatefulSet
+metadata:
+  name: kafka
+spec:
+  serviceName: kafka
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kafka
+  template: 
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - zookeeper
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: kafka
+          image: "reg.omtech.cn/omtech/kafka:latest"
+          command:
+            - "sh"
+            - "-c"
+            - "kafka \
+              start \
+              --host=0.0.0.0 \
+              --port=9092 \
+              --advertised_port=9092 \
+              --network_threads=4 \
+              --io_threads=4 \
+              --socket_send_buffer=102400 \
+              --socket_receive_buffer=102400 \
+              --socket_request_max=104857600 \
+              --message_max=5242880 \
+              --replica_fetch_max=5242880 \
+              --partitions_num=2 \
+              --default_replication_factor=2 \
+              --offsets_topic_replication_factor=2 \
+              --transaction_state_log_replication_factor=2 \
+              --log_flush_interval_messages=10000 \
+              --log_flush_interval=1000 \
+              --log_retention_hours=168 \
+              --zookeeper=zookeeper-0.zookeeper-ha.cditv.svc.cluster.local:2181,zookeeper-1.zookeeper-ha.cditv.svc.cluster.local:2181,zookeeper-2.zookeeper-ha.cditv.svc.cluster.local:2181 \
+              --zookeeper_connect_timeout=6000 \
+              --log_level=INFO"
+          ports:
+            - containerPort: 9092
+              name: server
+          resources:
+            requests:
+              memory: 1Gi
+              cpu: 500m
+          livenessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "kafka healthcheck --port=9092"
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "kafka healthcheck --port=9092"
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    name: kafka
+spec:
+  ports:
+    - name: server
+      protocol: "TCP"
+      port: 9092
+      targetPort: 9092
+  selector:
+    app: kafka
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: kafka-pdb
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+minAvailable: 2

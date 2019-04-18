@@ -21,6 +21,7 @@ HEAP=1G
 MAX_CLIENT_CNXNS=100
 SNAP_RETAIN_COUNT=3
 PURGE_INTERVAL=0
+LEADER_SERVES="yes"
 LOG_LEVEL="INFO"
 
 function create_config() {
@@ -67,7 +68,7 @@ function create_config() {
 
     echo "" >> $CONFIG_FILE
 
-    echo "leaderServes=no" >> $CONFIG_FILE
+    echo "leaderServes=$LEADER_SERVES" >> $CONFIG_FILE
 
     echo "" >> $CONFIG_FILE
 
@@ -79,20 +80,16 @@ function create_config() {
 }
 
 function create_data_dirs() {
+    MYID_FILE="$DATA_DIR/myid"
+
     if [ ! -d $DATA_DIR  ]; then
         mkdir -p $DATA_DIR
-        chown -R $USER:$USER $DATA_DIR
     fi
 
     if [ ! -d $DATA_LOG_DIR  ]; then
         mkdir -p $DATA_LOG_DIR
-        chown -R $USER:USER $DATA_LOG_DIR
     fi
 
-    if [ ! -d $LOG_DIR  ]; then
-        mkdir -p $LOG_DIR
-        chown -R $USER:$USER $LOG_DIR
-    fi
     if [ ! -f $MYID_FILE ] && [ $SERVERS -gt 1 ]; then
         echo $MY_ID >> $MYID_FILE
     fi
@@ -106,23 +103,77 @@ function print_servers() {
 }
 
 function create_jvm_props() {
+    JAVA_ENV_FILE="$CONF_DIR/java.env"
     rm -f $JAVA_ENV_FILE
     echo "ZOO_LOG_DIR=$LOG_DIR" >> $JAVA_ENV_FILE
     echo "JVMFLAGS=\"-Xmx$HEAP -Xms$HEAP\"" >> $JAVA_ENV_FILE
 }
 
 function create_log_props() {
-    ls -la $LOGGER_PROPS_FILE
+    LOGGER_PROPS_FILE="$CONF_DIR/log4j.properties"
+
+    if [ ! -d $LOG_DIR  ]; then
+        mkdir -p $LOG_DIR
+    fi
+
+    echo "Creating ZooKeeper log4j configuration"
+    echo "zookeeper.root.logger=CONSOLE" >> $LOGGER_PROPS_FILE
+    echo "zookeeper.console.threshold="$LOG_LEVEL >> $LOGGER_PROPS_FILE
+    echo "log4j.rootLogger=\${zookeeper.root.logger}" >> $LOGGER_PROPS_FILE
+    echo "log4j.appender.CONSOLE=org.apache.log4j.ConsoleAppender" >> $LOGGER_PROPS_FILE
+    echo "log4j.appender.CONSOLE.Threshold=\${zookeeper.console.threshold}" >> $LOGGER_PROPS_FILE
+    echo "log4j.appender.CONSOLE.layout=org.apache.log4j.PatternLayout" >> $LOGGER_PROPS_FILE
+    echo "log4j.appender.CONSOLE.layout.ConversionPattern=%d{ISO8601} [myid:%X{myid}] - %-5p [%t:%C{1}@%L] - %m%n" >> $LOGGER_PROPS_FILE
 }
 
 function start() {
+    MIN_SESSION_TIMEOUT=${MIN_SESSION_TIMEOUT:- $((TICK_TIME*2))}
+    MAX_SESSION_TIMEOUT=${MAX_SESSION_TIMEOUT:- $((TICK_TIME*20))}
+    CONFIG_FILE="$CONF_DIR/zoo.cfg"
+
+    if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
+        NAME=${BASH_REMATCH[1]}
+        ORD=${BASH_REMATCH[2]}
+    else
+        echo "Fialed to parse name and ordinal of Pod, hostname is $HOST."
+        exit 1
+    fi
+
+    MY_ID=$((ORD+1))
+
+    create_config \
+    && create_jvm_props \
+    && create_log_props \
+    && create_data_dirs
+
+    echo "Staring zookeeper."
     exec /usr/local/zookeeper/bin/zkServer.sh start-foreground
 }
 
+function healthcheck() {
+    PORT="$1"
+
+    RESULT=$(echo ruok | nc 127.0.0.1 $PORT)
+    if [ "$RESULT" == "imok" ]; then
+        exit 0
+    else
+        exit 1
+    fi
+}
+
 function usage() {
+    COMMAND="$1"
+
+    ERROR_MSG="$2"
+    
+    if [ "$ERROR_MSG" != "" ]; then
+        echo -e "\nERROR: $ERROR_MSG\n"
+    fi
+
+    if [ "$COMMAND" = "start" ]; then
 echo "\
-Usage: zookeeper [OPTIONS]
-Starts a ZooKeeper server based on the supplied options.
+Usage: zookeeper start [OPTIONS]
+Start a ZooKeeper server based on the supplied options.
     --servers               The number of servers in the ensemble. The default 
                             value is "$SERVERS".
 
@@ -153,10 +204,6 @@ Starts a ZooKeeper server based on the supplied options.
     --sync_limit            The maximum session timeout that the ensemble will 
                             allows a client to request. The default is "$SYNC_LIMIT".
 
-    --heap                  The maximum amount of heap to use. The format is the 
-                            same as that used for the Xmx and Xms parameters to the 
-                            JVM. e.g. --heap=2G. The default is "$HEAP".
-
     --max_client_cnxns      The maximum number of client connections that the 
                             ZooKeeper process will accept simultaneously. The 
                             default is "$MAX_CLIENT_CNXNS".
@@ -175,104 +222,180 @@ Starts a ZooKeeper server based on the supplied options.
     --min_session_timeout   The minimum time in milliseconds for a client session 
                             timeout. The default value is 20 * tick time.
 
+    --leader_serves         Leader accepts client connections.
+                            The default value is "$LEADER_SERVES".
+
+    --heap                  The maximum amount of heap to use. The format is the 
+                            same as that used for the Xmx and Xms parameters to the 
+                            JVM. e.g. --heap=2G. The default is "$HEAP".
+
+    --log_dir               The log directory for the zookeeeper server. 
+                            The default is "$LOG_LEVEL".
+
     --log_level             The log level for the zookeeeper server. Either FATAL,
                             ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
 "
+    elif [ "$COMMAND" = "healthcheck" ]; then
+echo "\
+Usage: zookeeper healthcheck [OPTIONS]
+ZooKeeper server healthcheck based on the supplied options.
+     --port  The port of server. The default value is "$CLIENT_PORT".
+"
+    else
+        echo "\
+Usage: zookeeper COMMAND OPTIONS
+       where COMMAND is one of: start, healthcheck
+
+Pass --help after any COMMAND to see command-specific usage information,
+     such as:    ./zookeeper start --help or ./zookeeper healthcheck --help
+"
+fi
 }
 
-optspec=":hv-:"
-while getopts "$optspec" optchar; do
-    case "${optchar}" in
-        -)
-            case "${OPTARG}" in
-                servers=*)
-                    SERVERS=${OPTARG##*=}
-                    ;;
-                conf_dir=*)
-                    CONF_DIR=${OPTARG##*=}
-                    ;;
-                data_dir=*)
-                    DATA_DIR=${OPTARG##*=}
-                    ;;
-                data_log_dir=*)
-                    DATA_LOG_DIR=${OPTARG##*=}
-                    ;;
-                log_dir=*)
-                    LOG_DIR=${OPTARG##*=}
-                    ;;
-                server_port=*)
-                    SERVER_PORT=${OPTARG##*=}
-                    ;;
-                client_port=*)
-                    CLIENT_PORT=${OPTARG##*=}
-                    ;;
-                leader_election_port=*)
-                    LEADER_ELECTION_PORT=${OPTARG##*=}
-                    ;;
-                init_limit=*)
-                    INIT_LIMIT=${OPTARG##*=}
-                    ;;
-                tick_time=*)
-                    TICK_TIME=${OPTARG##*=}
-                    ;;
-                sync_limit=*)
-                    SYNC_LIMIT=${OPTARG##*=}
-                    ;;
-                heap=*)
-                    HEAP=${OPTARG##*=}
-                    ;;
-                max_client_cnxns=*)
-                    MAX_CLIENT_CNXNS=${OPTARG##*=}
-                    ;;
-                snap_retain_count=*)
-                    SNAP_RETAIN_COUNT=${OPTARG##*=}
-                    ;;
-                purge_interval=*)
-                    PURGE_INTERVAL=${OPTARG##*=}
-                    ;;
-                max_session_timeout=*)
-                    MAX_SESSION_TIMEOUT=${OPTARG##*=}
-                    ;;
-                min_session_timeout=*)
-                    MIN_SESSION_TIMEOUT=${OPTARG##*=}
-                    ;;
-                log_level=*)
-                    LOG_LEVEL=${OPTARG##*=}
-                    ;;
-                *)
-                    echo "Unknown option --${OPTARG}" >&2
-                    exit 1
-                    ;;
-            esac;;
-        h)
-            usage
-            exit
-            ;;
-        v)
-            echo "Parsing option: '-${optchar}'" >&2
-            ;;
-        *)
-            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
-                echo "Non-option argument: '-${OPTARG}'" >&2
-            fi
-            ;;
-    esac
-done
-
-MIN_SESSION_TIMEOUT=${MIN_SESSION_TIMEOUT:- $((TICK_TIME*2))}
-MAX_SESSION_TIMEOUT=${MAX_SESSION_TIMEOUT:- $((TICK_TIME*20))}
-MYID_FILE="$DATA_DIR/myid"
-CONFIG_FILE="$CONF_DIR/zoo.cfg"
-LOGGER_PROPS_FILE="$CONF_DIR/log4j.properties"
-JAVA_ENV_FILE="$CONF_DIR/java.env"
-if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
-    NAME=${BASH_REMATCH[1]}
-    ORD=${BASH_REMATCH[2]}
+if [ $# -gt 0 ]; then
+    COMMAND="$1"
+    shift
 else
-    echo "Fialed to parse name and ordinal of Pod"
-    exit 1
+    usage ""
+    exit;
 fi
 
-MY_ID=$((ORD+1))
+if [ $COMMAND = "start" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
 
-create_config && create_jvm_props && create_log_props && create_data_dirs && start
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    servers=*)
+                        SERVERS=${OPTARG##*=}
+                        ;;
+                    conf_dir=*)
+                        CONF_DIR=${OPTARG##*=}
+                        ;;
+                    data_dir=*)
+                        DATA_DIR=${OPTARG##*=}
+                        ;;
+                    data_log_dir=*)
+                        DATA_LOG_DIR=${OPTARG##*=}
+                        ;;
+                    server_port=*)
+                        SERVER_PORT=${OPTARG##*=}
+                        ;;
+                    client_port=*)
+                        CLIENT_PORT=${OPTARG##*=}
+                        ;;
+                    leader_election_port=*)
+                        LEADER_ELECTION_PORT=${OPTARG##*=}
+                        ;;
+                    init_limit=*)
+                        INIT_LIMIT=${OPTARG##*=}
+                        ;;
+                    tick_time=*)
+                        TICK_TIME=${OPTARG##*=}
+                        ;;
+                    sync_limit=*)
+                        SYNC_LIMIT=${OPTARG##*=}
+                        ;;
+                    max_client_cnxns=*)
+                        MAX_CLIENT_CNXNS=${OPTARG##*=}
+                        ;;
+                    snap_retain_count=*)
+                        SNAP_RETAIN_COUNT=${OPTARG##*=}
+                        ;;
+                    purge_interval=*)
+                        PURGE_INTERVAL=${OPTARG##*=}
+                        ;;
+                    max_session_timeout=*)
+                        MAX_SESSION_TIMEOUT=${OPTARG##*=}
+                        ;;
+                    min_session_timeout=*)
+                        MIN_SESSION_TIMEOUT=${OPTARG##*=}
+                        ;;
+                    leader_serves=*)
+                        LEADER_SERVES=${OPTARG##*=}
+                        ;;
+                    heap=*)
+                        HEAP=${OPTARG##*=}
+                        ;;
+                    log_dir=*)
+                        LOG_DIR=${OPTARG##*=}
+                        ;;
+                    log_level=*)
+                        LOG_LEVEL=${OPTARG##*=}
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    start
+elif [ $COMMAND = "healthcheck" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
+
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    port=*)
+                        PORT=${OPTARG##*=}
+
+                        if [[ "$PORT" =~ ^[0-9]+$ ]]; then
+                            PORT=$PORT
+                        else
+                            usage "$COMMAND" "Port number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    healthcheck $PORT
+else
+    usage "" "$COMMAND is not a valid command!"
+    exit 1;
+fi
