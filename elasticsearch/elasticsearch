@@ -1,0 +1,378 @@
+#!/bin/bash
+
+set -e
+
+USER=`whoami`
+HOST=`hostname -s`
+DOMAIN=`hostname -d`
+
+CONF_DIR="/usr/local/elasticsearch/config"
+DATA_DIR="/data/elasticsearch"
+LOG_DIR="/var/log/elasticsearch"
+CLUSTER_NAME="elasticsearch-cluster"
+NODE_NAME=elasticsearch-node
+HTTP_PORT=9200
+DISCOVERY_HOSTS="127.0.0.1"
+MINIMUN_MASTER_NODES=2
+GATEWAY_RECOVER_AFTER_NODES=3
+HEAP="2G"
+LOG_LEVEL="INFO"
+
+function create_config() {
+    rm -f $CONFIG_FILE
+
+    echo "# ======================== Elasticsearch Configuration =========================" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# NOTE: Elasticsearch comes with reasonable defaults for most settings." >> $CONFIG_FILE
+    echo "#       Before you set out to tweak and tune the configuration, make sure you" >> $CONFIG_FILE
+    echo "#       understand what are you trying to accomplish and the consequences." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# The primary way of configuring a node is via this file. This template lists" >> $CONFIG_FILE
+    echo "# the most important settings you may want to configure for a production cluster." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Please consult the documentation for further information on configuration options:" >> $CONFIG_FILE
+    echo "# https://www.elastic.co/guide/en/elasticsearch/reference/index.html" >> $CONFIG_FILE
+
+    echo "#" >> $CONFIG_FILE
+    echo "# ---------------------------------- Cluster -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Use a descriptive name for your cluster:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "cluster.name: $CLUSTER_NAME" >> $CONFIG_FILE
+
+    echo "#" >> $CONFIG_FILE
+    echo "# ------------------------------------ Node ------------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Use a descriptive name for the node:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "node.name: $NODE_NAME" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Add custom attributes to the node:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "node.attr.rack: r1" >> $CONFIG_FILE
+
+    echo "#" >> $CONFIG_FILE
+    echo "# ----------------------------------- Paths ------------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Path to directory where to store the data (separate multiple locations by comma):" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "path.data: $DATA_DIR" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Path to log files:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "path.logs: $LOG_DIR" >> $CONFIG_FILE
+
+    echo "#" >> $CONFIG_FILE
+    echo "# ----------------------------------- Memory -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Lock the memory on startup:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "bootstrap.memory_lock: true" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Make sure that the heap size is set to about half the memory available" >> $CONFIG_FILE
+    echo "# on the system and that the owner of the process is allowed to use this" >> $CONFIG_FILE
+    echo "# limit." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Elasticsearch performs poorly when the system is swapping the memory." >> $CONFIG_FILE
+    
+    echo "#" >> $CONFIG_FILE
+    echo "# ---------------------------------- Network -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Set the bind address to a specific IP (IPv4 or IPv6):" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "network.host: $HOST" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Set a custom port for HTTP:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "http.port: $HTTP_PORT" >> $CONFIG_FILE
+
+    echo "#" >> $CONFIG_FILE
+    echo "# For more information, consult the network module documentation." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# --------------------------------- Discovery ----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Pass an initial list of hosts to perform discovery when new node is started:" >> $CONFIG_FILE
+    echo '# The default list of hosts is ["127.0.0.1", "[::1]"]' >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "discovery.zen.ping.unicast.hosts: [$DISCOVERY_HOSTS]" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo '# Prevent the "split brain" by configuring the majority of nodes (total number of master-eligible nodes / 2 + 1):' >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "discovery.zen.minimum_master_nodes: $MINIMUN_MASTER_NODES" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# For more information, consult the zen discovery module documentation." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# ---------------------------------- Gateway -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Block initial recovery after a full cluster restart until N nodes are started:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "gateway.recover_after_nodes: $GATEWAY_RECOVER_AFTER_NODES" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# For more information, consult the gateway module documentation." >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# ---------------------------------- Various -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# Require explicit names when deleting indices:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "action.destructive_requires_name: true" >> $CONFIG_FILE
+
+    cat $CONFIG_FILE >&2
+}
+
+function create_data_dirs() {
+    if [ ! -d $DATA_DIR  ]; then
+        mkdir -p $DATA_DIR
+    fi
+}
+
+function create_jvm_props() {
+    JAVA_ENV_FILE="$CONF_DIR/jvm.options"
+    sed -i 's/-Xms1g/-Xms$HEAP/g' $JAVA_ENV_FILE
+    sed -i 's/-Xmx1g/-Xmx$HEAP/g' $JAVA_ENV_FILE
+}
+
+function create_log_props() {
+    LOGGER_PROPS_FILE="$CONF_DIR/log4j2.properties"
+
+    if [ ! -d $LOG_DIR  ]; then
+        mkdir -p $LOG_DIR
+    fi
+}
+
+function start() {
+    CONFIG_FILE="$CONF_DIR/elasticsearch.yml"
+
+    if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
+        NAME=${BASH_REMATCH[1]}
+        ORD=${BASH_REMATCH[2]}
+    else
+        echo "Fialed to parse name and ordinal of Pod, hostname is $HOST."
+        exit 1
+    fi
+
+    create_config \
+    && create_jvm_props \
+    && create_log_props \
+    && create_data_dirs
+
+    echo "Staring elasticsearch."
+    exec /usr/local/elasticsearch/bin/elasticsearch
+}
+
+function healthcheck() {
+    PORT="$1"
+
+    RESULT=$(echo ruok | nc 127.0.0.1 $PORT)
+    if [ "$RESULT" == "imok" ]; then
+        exit 0
+    else
+        exit 1
+    fi
+}
+
+function usage() {
+    COMMAND="$1"
+
+    ERROR_MSG="$2"
+    
+    if [ "$ERROR_MSG" != "" ]; then
+        echo -e "\nERROR: $ERROR_MSG\n"
+    fi
+
+    if [ "$COMMAND" = "start" ]; then
+echo "\
+Usage: elasticsearch start [OPTIONS]
+Start a Elasticsearch server based on the supplied options.
+    --cluster_name                  Use a descriptive name for your cluster. The default 
+                                    value is "$CLUSTER_NAME".
+
+    --node_name                     Use a descriptive name for the node. The default is "$NODE_NAME".
+
+    --network_host                  Set the bind address to a specific IP (IPv4 or IPv6).
+                                    The default is "$HOST". 
+
+    --http_port                     Set a custom port for HTTP. The default is "$HTTP_PORT". 
+
+    --data_dir                      Path to directory where to store the data.
+                                    The default is "$DATA_DIR".
+
+    --discovery_hosts               Pass an initial list of hosts to perform discovery 
+                                    when new node is started. The default is "$CLIENT_PORT".
+
+    --minimun_master_nodes          Prevent the \"split brain\" by configuring 
+                                    the majority of nodes (total number of master-eligible nodes / 2 + 1).
+                                    The default is "$MINIMUN_MASTER_NODES".
+
+    --gateway_recover_after_nodes   Block initial recovery after a full cluster restart until N nodes are started. The default is "$GATEWAY_RECOVER_AFTER_NODES".
+
+    --heap                          The maximum amount of heap to use. The format is the 
+                                    same as that used for the Xmx and Xms parameters to the 
+                                    JVM. e.g. --heap=2G. The default is "$HEAP".
+
+    --log_dir                       The log directory for the elasticsearch server. 
+                                    The default is "$LOG_DIR".
+
+    --log_level                     The log level for the elasticsearch server. Either FATAL,
+                                    ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
+"
+    elif [ "$COMMAND" = "healthcheck" ]; then
+echo "\
+Usage: elasticsearch healthcheck [OPTIONS]
+Elasticsearch server healthcheck based on the supplied options.
+     --port  The port of server. The default value is "$CLIENT_PORT".
+"
+    else
+        echo "\
+Usage: elasticsearch COMMAND OPTIONS
+       where COMMAND is one of: start, healthcheck
+
+Pass --help after any COMMAND to see command-specific usage information,
+     such as:    ./elasticsearch start --help or ./elasticsearch healthcheck --help
+"
+fi
+}
+
+if [ $# -gt 0 ]; then
+    COMMAND="$1"
+    shift
+else
+    usage ""
+    exit;
+fi
+
+if [ $COMMAND = "start" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
+
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    cluster_name=*)
+                        CLUSTER_NAME=${OPTARG##*=}
+                        ;;
+                    node_name=*)
+                        NODE_NAME=${OPTARG##*=}
+                        ;;
+                    network_host=*)
+                        HOST=${OPTARG##*=}
+                        ;;
+                    http_port=*)
+                        HTTP_PORT=${OPTARG##*=}
+
+                        if [[ "$HTTP_PORT" =~ ^[0-9]+$ ]]; then
+                            HTTP_PORT=$HTTP_PORT
+                        else
+                            usage "$COMMAND" "Http port number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    data_dir=*)
+                        DATA_DIR=${OPTARG##*=}
+                        ;;
+                    discovery_hosts=*)
+                        DISCOVERY_HOSTS=${OPTARG##*=}
+                        ;;
+                    minimun_master_nodes=*)
+                        MINIMUN_MASTER_NODES=${OPTARG##*=}
+
+                        if [[ "$MINIMUN_MASTER_NODES" =~ ^[0-9]+$ ]]; then
+                            MINIMUN_MASTER_NODES=$MINIMUN_MASTER_NODES
+                        else
+                            usage "$COMMAND" "Minimun master nodes number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    gateway_recover_after_nodes=*)
+                        GATEWAY_RECOVER_AFTER_NODES=${OPTARG##*=}
+
+                        if [[ "$GATEWAY_RECOVER_AFTER_NODES" =~ ^[0-9]+$ ]]; then
+                            GATEWAY_RECOVER_AFTER_NODES=$GATEWAY_RECOVER_AFTER_NODES
+                        else
+                            usage "$COMMAND" "Gateway recover after nodes number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    heap=*)
+                        HEAP=${OPTARG##*=}
+                        ;;
+                    log_dir=*)
+                        LOG_DIR=${OPTARG##*=}
+                        ;;
+                    log_level=*)
+                        LOG_LEVEL=${OPTARG##*=}
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    start
+elif [ $COMMAND = "healthcheck" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
+
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    port=*)
+                        PORT=${OPTARG##*=}
+
+                        if [[ "$PORT" =~ ^[0-9]+$ ]]; then
+                            PORT=$PORT
+                        else
+                            usage "$COMMAND" "Port number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    healthcheck $PORT
+else
+    usage "" "$COMMAND is not a valid command!"
+    exit 1;
+fi

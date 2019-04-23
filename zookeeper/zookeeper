@@ -17,7 +17,7 @@ LEADER_ELECTION_PORT=3888
 INIT_LIMIT=10
 TICK_TIME=2000
 SYNC_LIMIT=5
-HEAP=1G
+HEAP="1G"
 MAX_CLIENT_CNXNS=100
 SNAP_RETAIN_COUNT=3
 PURGE_INTERVAL=0
@@ -230,7 +230,7 @@ Start a ZooKeeper server based on the supplied options.
                             JVM. e.g. --heap=2G. The default is "$HEAP".
 
     --log_dir               The log directory for the zookeeeper server. 
-                            The default is "$LOG_LEVEL".
+                            The default is "$LOG_DIR".
 
     --log_level             The log level for the zookeeeper server. Either FATAL,
                             ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
@@ -273,6 +273,13 @@ if [ $COMMAND = "start" ]; then
                 case "${OPTARG}" in
                     servers=*)
                         SERVERS=${OPTARG##*=}
+
+                        if [[ "$SERVERS" =~ ^[0-9]+$ ]]; then
+                            SERVERS=$SERVERS
+                        else
+                            usage "$COMMAND" "Servers number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     conf_dir=*)
                         CONF_DIR=${OPTARG##*=}
@@ -285,39 +292,123 @@ if [ $COMMAND = "start" ]; then
                         ;;
                     server_port=*)
                         SERVER_PORT=${OPTARG##*=}
+
+                        if [[ "$SERVER_PORT" =~ ^[0-9]+$ ]]; then
+                            SERVER_PORT=$SERVER_PORT
+                        else
+                            usage "$COMMAND" "Server port number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     client_port=*)
                         CLIENT_PORT=${OPTARG##*=}
+
+                        if [[ "$CLIENT_PORT" =~ ^[0-9]+$ ]]; then
+                            CLIENT_PORT=$CLIENT_PORT
+                        else
+                            usage "$COMMAND" "Client port number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     leader_election_port=*)
                         LEADER_ELECTION_PORT=${OPTARG##*=}
+
+                        if [[ "$LEADER_ELECTION_PORT" =~ ^[0-9]+$ ]]; then
+                            LEADER_ELECTION_PORT=$LEADER_ELECTION_PORT
+                        else
+                            usage "$COMMAND" "Leader election port number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     init_limit=*)
                         INIT_LIMIT=${OPTARG##*=}
+
+                        if [[ "$INIT_LIMIT" =~ ^[0-9]+$ ]]; then
+                            INIT_LIMIT=$INIT_LIMIT
+                        else
+                            usage "$COMMAND" "Init limit number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     tick_time=*)
                         TICK_TIME=${OPTARG##*=}
+
+                        if [[ "$TICK_TIME" =~ ^[0-9]+$ ]]; then
+                            TICK_TIME=$TICK_TIME
+                        else
+                            usage "$COMMAND" "Tick time number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     sync_limit=*)
                         SYNC_LIMIT=${OPTARG##*=}
+
+                        if [[ "$SYNC_LIMIT" =~ ^[0-9]+$ ]]; then
+                            SYNC_LIMIT=$SYNC_LIMIT
+                        else
+                            usage "$COMMAND" "Sync limit number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     max_client_cnxns=*)
                         MAX_CLIENT_CNXNS=${OPTARG##*=}
+
+                        if [[ "$MAX_CLIENT_CNXNS" =~ ^[0-9]+$ ]]; then
+                            MAX_CLIENT_CNXNS=$MAX_CLIENT_CNXNS
+                        else
+                            usage "$COMMAND" "Max client cnxns number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     snap_retain_count=*)
                         SNAP_RETAIN_COUNT=${OPTARG##*=}
+
+                        if [[ "$SNAP_RETAIN_COUNT" =~ ^[0-9]+$ ]]; then
+                            SNAP_RETAIN_COUNT=$SNAP_RETAIN_COUNT
+                        else
+                            usage "$COMMAND" "Snap retain count number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     purge_interval=*)
                         PURGE_INTERVAL=${OPTARG##*=}
+
+                        if [[ "$PURGE_INTERVAL" =~ ^[0-9]+$ ]]; then
+                            PURGE_INTERVAL=$PURGE_INTERVAL
+                        else
+                            usage "$COMMAND" "Purge interval number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     max_session_timeout=*)
                         MAX_SESSION_TIMEOUT=${OPTARG##*=}
+
+                        if [[ "$MAX_SESSION_TIMEOUT" =~ ^[0-9]+$ ]]; then
+                            MAX_SESSION_TIMEOUT=$MAX_SESSION_TIMEOUT
+                        else
+                            usage "$COMMAND" "Min session timeout number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     min_session_timeout=*)
                         MIN_SESSION_TIMEOUT=${OPTARG##*=}
+
+                        if [[ "$MIN_SESSION_TIMEOUT" =~ ^[0-9]+$ ]]; then
+                            MIN_SESSION_TIMEOUT=$MIN_SESSION_TIMEOUT
+                        else
+                            usage "$COMMAND" "Min session timeout number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     leader_serves=*)
                         LEADER_SERVES=${OPTARG##*=}
+
+                        if [[ "$LEADER_SERVES" =~ ^[0-9]+$ ]]; then
+                            LEADER_SERVES=$LEADER_SERVES
+                        else
+                            usage "$COMMAND" "Leader serves number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     heap=*)
                         HEAP=${OPTARG##*=}

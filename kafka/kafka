@@ -404,60 +404,179 @@ if [ $COMMAND = "start" ]; then
                         ;;
                     port=*)
                         LISTENER_PORT=${OPTARG##*=}
+
+                        if [[ "$LISTENER_PORT" =~ ^[0-9]+$ ]]; then
+                            LISTENER_PORT=$LISTENER_PORT
+                        else
+                            usage "$COMMAND" "Port number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     advertised_host=*)
                         ADVERTISED_HOST=${OPTARG##*=}
                         ;;
                     advertised_port=*)
                         ADVERTISED_PORT=${OPTARG##*=}
+
+                        if [[ "$ADVERTISED_PORT" =~ ^[0-9]+$ ]]; then
+                            ADVERTISED_PORT=$ADVERTISED_PORT
+                        else
+                            usage "$COMMAND" "Advertised port number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     network_threads=*)
                         NETWORK_THREADS=${OPTARG##*=}
+
+                        if [[ "$NETWORK_THREADS" =~ ^[0-9]+$ ]]; then
+                            NETWORK_THREADS=$NETWORK_THREADS
+                        else
+                            usage "$COMMAND" "Network threads number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     io_threads=*)
                         IO_THREADS=${OPTARG##*=}
+
+                        if [[ "$IO_THREADS" =~ ^[0-9]+$ ]]; then
+                            IO_THREADS=$IO_THREADS
+                        else
+                            usage "$COMMAND" "IO threads number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     socket_send_buffer=*)
                         SOCKET_SEND_BUFFER=${OPTARG##*=}
+
+                        if [[ "$SOCKET_SEND_BUFFER" =~ ^[0-9]+$ ]]; then
+                            SOCKET_SEND_BUFFER=$SOCKET_SEND_BUFFER
+                        else
+                            usage "$COMMAND" "Socket send buffer number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     socket_receive_buffer=*)
                         SOCKET_RECEIVE_BUFFER=${OPTARG##*=}
+
+                        if [[ "$SOCKET_RECEIVE_BUFFER" =~ ^[0-9]+$ ]]; then
+                            SOCKET_RECEIVE_BUFFER=$SOCKET_RECEIVE_BUFFER
+                        else
+                            usage "$COMMAND" "Socket receive buffer number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     socket_request_max=*)
                         SOCKET_REQUEST_MAX=${OPTARG##*=}
+
+                        if [[ "$SOCKET_REQUEST_MAX" =~ ^[0-9]+$ ]]; then
+                            SOCKET_REQUEST_MAX=$SOCKET_REQUEST_MAX
+                        else
+                            usage "$COMMAND" "Socket request max number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     message_max=*)
                         MESSAGE_MAX=${OPTARG##*=}
+
+                        if [[ "$MESSAGE_MAX" =~ ^[0-9]+$ ]]; then
+                            MESSAGE_MAX=$MESSAGE_MAX
+                        else
+                            usage "$COMMAND" "Message max number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     replica_fetch_max=*)
                         REPLICA_FETCH_MAX=${OPTARG##*=}
+
+                        if [[ "$REPLICA_FETCH_MAX" =~ ^[0-9]+$ ]]; then
+                            REPLICA_FETCH_MAX=$REPLICA_FETCH_MAX
+                        else
+                            usage "$COMMAND" "Replica fetch max number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     partitions_num=*)
                         PARTITIONS_NUM=${OPTARG##*=}
+
+                        if [[ "$PARTITIONS_NUM" =~ ^[0-9]+$ ]]; then
+                            PARTITIONS_NUM=$PARTITIONS_NUM
+                        else
+                            usage "$COMMAND" "Partitions num number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     default_replication_factor=*)
                         DEFAULT_REPLICATION_FACTOR=${OPTARG##*=}
+
+                        if [[ "$DEFAULT_REPLICATION_FACTOR" =~ ^[0-9]+$ ]]; then
+                            DEFAULT_REPLICATION_FACTOR=$DEFAULT_REPLICATION_FACTOR
+                        else
+                            usage "$COMMAND" "Default replication factor number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     offsets_topic_replication_factor=*)
                         OFFSETS_TOPIC_REPLICATION_FACTOR=${OPTARG##*=}
+
+                        if [[ "$OFFSETS_TOPIC_REPLICATION_FACTOR" =~ ^[0-9]+$ ]]; then
+                            OFFSETS_TOPIC_REPLICATION_FACTOR=$OFFSETS_TOPIC_REPLICATION_FACTOR
+                        else
+                            usage "$COMMAND" "Offsets topic replication factor number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     transaction_state_log_replication_factor=*)
                         TRANSACTION_STATE_LOG_REPLICATION_FACTOR=${OPTARG##*=}
+
+                        if [[ "$TRANSACTION_STATE_LOG_REPLICATION_FACTOR" =~ ^[0-9]+$ ]]; then
+                            TRANSACTION_STATE_LOG_REPLICATION_FACTOR=$TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+                        else
+                            usage "$COMMAND" "Transaction state log replication factor number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     log_flush_interval_messages=*)
                         LOG_FLUSH_INTERVAL_MESSAGES=${OPTARG##*=}
+
+                        if [[ "$LOG_FLUSH_INTERVAL_MESSAGES" =~ ^[0-9]+$ ]]; then
+                            LOG_FLUSH_INTERVAL_MESSAGES=$LOG_FLUSH_INTERVAL_MESSAGES
+                        else
+                            usage "$COMMAND" "Log flush interval message number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     log_flush_interval=*)
                         LOG_FLUSH_INTERVAL=${OPTARG##*=}
+
+                        if [[ "$LOG_FLUSH_INTERVAL" =~ ^[0-9]+$ ]]; then
+                            LOG_FLUSH_INTERVAL=$LOG_FLUSH_INTERVAL
+                        else
+                            usage "$COMMAND" "Log flush interval number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     log_retention_hours=*)
                         LOG_REPLICATION_HOURS=${OPTARG##*=}
+
+                        if [[ "$LOG_REPLICATION_HOURS" =~ ^[0-9]+$ ]]; then
+                            LOG_REPLICATION_HOURS=$LOG_REPLICATION_HOURS
+                        else
+                            usage "$COMMAND" "Log retention hours number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     zookeeper=*)
                         ZOOKEEPER=${OPTARG##*=}
                         ;;
                     zookeeper_connect_timeout=*)
                         ZOOKEEPER_CONNECT_TIMEOUT=${OPTARG##*=}
+
+                        if [[ "$ZOOKEEPER_CONNECT_TIMEOUT" =~ ^[0-9]+$ ]]; then
+                            ZOOKEEPER_CONNECT_TIMEOUT=$ZOOKEEPER_CONNECT_TIMEOUT
+                        else
+                            usage "$COMMAND" "Zookeeper connect timeout number is required when using the $1 option!"
+                            exit 1
+                        fi
                         ;;
                     heap=*)
                         HEAP=${OPTARG##*=}

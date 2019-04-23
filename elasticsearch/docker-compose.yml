@@ -1,0 +1,50 @@
+version: '2'
+services:
+  elasticsearch-node1:
+    image: eduosi/elasticsearch
+    restart: always
+    container_name: elasticsearch-node1
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.51
+    ports:
+      - "19200:9200"
+    environment:
+      ES_NODE_NAME: elasticsearch-node-1
+      ES_HOST: elasticsearch-node1
+      ES_DISCOVERY_HOSTS: '"elasticsearch-node-1", "elasticsearch-node-2", "elasticsearch-node-3"'
+      ES_JVM_XMS: 2g
+      ES_JVM_XMX: 2g
+  elasticsearch-node2:
+    image: eduosi/elasticsearch
+    restart: always
+    container_name: elasticsearch-node2
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.52
+    ports:
+      - "29200:9200"
+    environment:
+      ES_NODE_NAME: elasticsearch-node-2
+      ES_HOST: elasticsearch-node2
+      ES_DISCOVERY_HOSTS: '"elasticsearch-node-1", "elasticsearch-node-2", "elasticsearch-node-3"'
+      ES_JVM_XMS: 2g
+      ES_JVM_XMX: 2g
+  elasticsearch-node3:
+    image: eduosi/elasticsearch
+    restart: always
+    container_name: elasticsearch-node3
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.53
+    ports:
+      - "39200:9200"
+    environment:
+      ES_NODE_NAME: elasticsearch-node-3
+      ES_HOST: elasticsearch-node3
+      ES_DISCOVERY_HOSTS: '"elasticsearch-node-1", "elasticsearch-node-2", "elasticsearch-node-3"'
+      ES_JVM_XMS: 2g
+      ES_JVM_XMX: 2g
+networks:
+  static_network:
+    external: true
