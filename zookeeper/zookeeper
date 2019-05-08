@@ -7,7 +7,8 @@ HOST=`hostname -s`
 DOMAIN=`hostname -d`
 
 SERVERS=1
-CONF_DIR="/usr/local/zookeeper/conf"
+BASE_DIR="/usr/local/zookeeper"
+CONF_DIR=$BASE_DIR"/conf"
 DATA_DIR="/data/zookeeper/data"
 DATA_LOG_DIR="/data/zookeeper/log"
 LOG_DIR="/var/log/zookeeper"
@@ -105,6 +106,7 @@ function print_servers() {
 function create_jvm_props() {
     JAVA_ENV_FILE="$CONF_DIR/java.env"
     rm -f $JAVA_ENV_FILE
+
     echo "ZOO_LOG_DIR=$LOG_DIR" >> $JAVA_ENV_FILE
     echo "JVMFLAGS=\"-Xmx$HEAP -Xms$HEAP\"" >> $JAVA_ENV_FILE
 }
@@ -147,7 +149,7 @@ function start() {
     && create_data_dirs
 
     echo "Staring zookeeper."
-    exec /usr/local/zookeeper/bin/zkServer.sh start-foreground
+    exec $BASE_DIR/bin/zkServer.sh start-foreground
 }
 
 function healthcheck() {

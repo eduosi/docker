@@ -5,20 +5,47 @@ set -e
 USER=`whoami`
 HOST=`hostname -s`
 DOMAIN=`hostname -d`
+IP=`hostname -i`
 
-CONF_DIR="/usr/local/elasticsearch/config"
+BASE_DIR="/usr/local/elasticsearch"
+CONF_DIR=$BASE_DIR"/config"
 DATA_DIR="/data/elasticsearch"
 LOG_DIR="/var/log/elasticsearch"
 CLUSTER_NAME="elasticsearch-cluster"
-NODE_NAME=elasticsearch-node
+NODE_NAME_PREFIX="elasticsearch-node"
+NODE_NAME="$NODE_NAME_PREFIX-1"
+NETWORK_HOST=$IP
 HTTP_PORT=9200
-DISCOVERY_HOSTS="127.0.0.1"
-MINIMUN_MASTER_NODES=2
+DISCOVERY_SEED_HOSTS='"127.0.0.1", "[::1]"'
+CLUSTER_INITIAL_MASTER_NODES="$NODE_NAME_PREFIX-1"
 GATEWAY_RECOVER_AFTER_NODES=3
+ES_TMPDIR=$TMPDIR
 HEAP="2G"
-LOG_LEVEL="INFO"
+
+JAVA_VERSION=`java -version 2>&1 | awk 'NR==1{ gsub(/"/,""); print $3 }'`
+
+function run() {
+  if [[ "$(id -u)" == "0" ]]; then
+    # If running as root, drop to specified UID and run command
+    exec su - 10001 "${@}"
+  else
+    # Either we are running in Openshift with random uid and are a member of the root group
+    # or with a custom --user
+    exec "${@}"
+  fi
+}
 
 function create_config() {
+    if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
+        NAME=${BASH_REMATCH[1]}
+        ORD=${BASH_REMATCH[2]}
+    else
+        echo "Fialed to parse name and ordinal of Pod, hostname is $HOST."
+        exit 1
+    fi
+
+    NODE_ID=$((ORD+1))
+    NODE_NAME=$NODE_NAME_PREFIX$NODE_ID
     rm -f $CONFIG_FILE
 
     echo "# ======================== Elasticsearch Configuration =========================" >> $CONFIG_FILE
@@ -74,33 +101,33 @@ function create_config() {
     echo "# limit." >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
     echo "# Elasticsearch performs poorly when the system is swapping the memory." >> $CONFIG_FILE
-    
+
     echo "#" >> $CONFIG_FILE
     echo "# ---------------------------------- Network -----------------------------------" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
     echo "# Set the bind address to a specific IP (IPv4 or IPv6):" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
-    echo "network.host: $HOST" >> $CONFIG_FILE
+    echo "network.host: $NETWORK_HOST" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
     echo "# Set a custom port for HTTP:" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
     echo "http.port: $HTTP_PORT" >> $CONFIG_FILE
-
     echo "#" >> $CONFIG_FILE
     echo "# For more information, consult the network module documentation." >> $CONFIG_FILE
+
     echo "#" >> $CONFIG_FILE
     echo "# --------------------------------- Discovery ----------------------------------" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
-    echo "# Pass an initial list of hosts to perform discovery when new node is started:" >> $CONFIG_FILE
-    echo '# The default list of hosts is ["127.0.0.1", "[::1]"]' >> $CONFIG_FILE
+    echo "# Pass an initial list of hosts to perform discovery when this node is started:" >> $CONFIG_FILE
+    echo "# The default list of hosts is [\"127.0.0.1\", \"[::1]\"]" >> $CONFIG_FILE
+    echo "discovery.seed_hosts: [$DISCOVERY_SEED_HOSTS]" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
-    echo "discovery.zen.ping.unicast.hosts: [$DISCOVERY_HOSTS]" >> $CONFIG_FILE
+    echo "# Bootstrap the cluster using an initial set of master-eligible nodes:" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
-    echo '# Prevent the "split brain" by configuring the majority of nodes (total number of master-eligible nodes / 2 + 1):' >> $CONFIG_FILE
+    echo "cluster.initial_master_nodes: [$CLUSTER_INITIAL_MASTER_NODES]" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
-    echo "discovery.zen.minimum_master_nodes: $MINIMUN_MASTER_NODES" >> $CONFIG_FILE
-    echo "#" >> $CONFIG_FILE
-    echo "# For more information, consult the zen discovery module documentation." >> $CONFIG_FILE
+    echo "# For more information, consult the discovery and cluster formation module documentation." >> $CONFIG_FILE
+    
     echo "#" >> $CONFIG_FILE
     echo "# ---------------------------------- Gateway -----------------------------------" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
@@ -109,6 +136,7 @@ function create_config() {
     echo "gateway.recover_after_nodes: $GATEWAY_RECOVER_AFTER_NODES" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
     echo "# For more information, consult the gateway module documentation." >> $CONFIG_FILE
+
     echo "#" >> $CONFIG_FILE
     echo "# ---------------------------------- Various -----------------------------------" >> $CONFIG_FILE
     echo "#" >> $CONFIG_FILE
@@ -127,13 +155,163 @@ function create_data_dirs() {
 
 function create_jvm_props() {
     JAVA_ENV_FILE="$CONF_DIR/jvm.options"
-    sed -i 's/-Xms1g/-Xms$HEAP/g' $JAVA_ENV_FILE
-    sed -i 's/-Xmx1g/-Xmx$HEAP/g' $JAVA_ENV_FILE
+
+    rm -fR $JAVA_ENV_FILE
+
+    if [ "x$ES_TMPDIR" = "x" ]; then
+        ES_TMPDIR="/tmp"
+    fi
+
+    echo "## JVM configuration" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "################################################################" >> $JAVA_ENV_FILE
+    echo "## IMPORTANT: JVM heap size" >> $JAVA_ENV_FILE
+    echo "################################################################" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "## You should always set the min and max JVM heap" >> $JAVA_ENV_FILE
+    echo "## size to the same value. For example, to set" >> $JAVA_ENV_FILE
+    echo "## the heap to 4 GB, set:" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "## -Xms4g" >> $JAVA_ENV_FILE
+    echo "## -Xmx4g" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "## See https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html" >> $JAVA_ENV_FILE
+    echo "## for more information" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "################################################################" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# Xms represents the initial size of total heap space" >> $JAVA_ENV_FILE
+    echo "# Xmx represents the maximum size of total heap space" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+    echo "-Xms$HEAP" >> $JAVA_ENV_FILE
+    echo "-Xmx$HEAP" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "################################################################" >> $JAVA_ENV_FILE
+    echo "## Expert settings" >> $JAVA_ENV_FILE
+    echo "################################################################" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "## All settings below this section are considered" >> $JAVA_ENV_FILE
+    echo "## expert settings. Don't tamper with them unless" >> $JAVA_ENV_FILE
+    echo "## you understand what you are doing" >> $JAVA_ENV_FILE
+    echo "##" >> $JAVA_ENV_FILE
+    echo "################################################################" >> $JAVA_ENV_FILE
+
+    echo "## GC configuration" >> $JAVA_ENV_FILE
+    echo "-XX:+UseConcMarkSweepGC" >> $JAVA_ENV_FILE
+    echo "-XX:CMSInitiatingOccupancyFraction=75" >> $JAVA_ENV_FILE
+    echo "-XX:+UseCMSInitiatingOccupancyOnly" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    if [[ "$JAVA_VERSION" =~ ^10.* ]]; then
+        echo "## G1GC Configuration" >> $JAVA_ENV_FILE
+        echo "# NOTE: G1GC is only supported on JDK version 10 or later." >> $JAVA_ENV_FILE
+        echo "# To use G1GC uncomment the lines below." >> $JAVA_ENV_FILE
+        echo "10-:-XX:-UseConcMarkSweepGC" >> $JAVA_ENV_FILE
+        echo "10-:-XX:-UseCMSInitiatingOccupancyOnly" >> $JAVA_ENV_FILE
+        echo "10-:-XX:+UseG1GC" >> $JAVA_ENV_FILE
+        echo "10-:-XX:InitiatingHeapOccupancyPercent=75" >> $JAVA_ENV_FILE
+        echo "" >> $JAVA_ENV_FILE
+    fi
+
+    echo "## DNS cache policy" >> $JAVA_ENV_FILE
+    echo "# cache ttl in seconds for positive DNS lookups noting that this overrides the" >> $JAVA_ENV_FILE
+    echo "# JDK security property networkaddress.cache.ttl; set to -1 to cache forever" >> $JAVA_ENV_FILE
+    echo "-Des.networkaddress.cache.ttl=60" >> $JAVA_ENV_FILE
+    echo "# cache ttl in seconds for negative DNS lookups noting that this overrides the" >> $JAVA_ENV_FILE
+    echo "# JDK security property networkaddress.cache.negative ttl; set to -1 to cache" >> $JAVA_ENV_FILE
+    echo "# forever" >> $JAVA_ENV_FILE
+    echo "-Des.networkaddress.cache.negative.ttl=10" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "## optimizations" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# pre-touch memory pages used by the JVM during initialization" >> $JAVA_ENV_FILE
+    echo "-XX:+AlwaysPreTouch" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "## basic" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# explicitly set the stack size" >> $JAVA_ENV_FILE
+    echo "-Xss1m" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# set to headless, just in case" >> $JAVA_ENV_FILE
+    echo "-Djava.awt.headless=true" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# ensure UTF-8 encoding by default (e.g. filenames)" >> $JAVA_ENV_FILE
+    echo "-Dfile.encoding=UTF-8" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# use our provided JNA always versus the system one" >> $JAVA_ENV_FILE
+    echo "-Djna.nosys=true" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# turn off a JDK optimization that throws away stack traces for common" >> $JAVA_ENV_FILE
+    echo "# exceptions because stack traces are important for debugging" >> $JAVA_ENV_FILE
+    echo "-XX:-OmitStackTraceInFastThrow" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# flags to configure Netty" >> $JAVA_ENV_FILE
+    echo "-Dio.netty.noUnsafe=true" >> $JAVA_ENV_FILE
+    echo "-Dio.netty.noKeySetOptimization=true" >> $JAVA_ENV_FILE
+    echo "-Dio.netty.recycler.maxCapacityPerThread=0" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# log4j 2" >> $JAVA_ENV_FILE
+    echo "-Dlog4j.shutdownHookEnabled=false" >> $JAVA_ENV_FILE
+    echo "-Dlog4j2.disable.jmx=true" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "-Djava.io.tmpdir=$ES_TMPDIR" >> $JAVA_ENV_FILE
+    echo "-Djna.tmpdir=$ES_TMPDIR" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "## heap dumps" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# generate a heap dump when an allocation from the Java heap fails" >> $JAVA_ENV_FILE
+    echo "# heap dumps are created in the working directory of the JVM" >> $JAVA_ENV_FILE
+    echo "-XX:+HeapDumpOnOutOfMemoryError" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# specify an alternative path for heap dumps; ensure the directory exists and" >> $JAVA_ENV_FILE
+    echo "# has sufficient space" >> $JAVA_ENV_FILE
+    echo "-XX:HeapDumpPath=data" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    echo "# specify an alternative path for JVM fatal error logs" >> $JAVA_ENV_FILE
+    echo "-XX:ErrorFile=$LOG_DIR/hs_err_pid%p.log" >> $JAVA_ENV_FILE
+    echo "" >> $JAVA_ENV_FILE
+
+    if [[ "$JAVA_VERSION" =~ ^1.8.* ]]; then
+        echo "## JDK 8 GC logging" >> $JAVA_ENV_FILE
+        echo "" >> $JAVA_ENV_FILE
+        echo "8:-XX:+PrintGCDetails" >> $JAVA_ENV_FILE
+        echo "8:-XX:+PrintGCDateStamps" >> $JAVA_ENV_FILE
+        echo "8:-XX:+PrintTenuringDistribution" >> $JAVA_ENV_FILE
+        echo "8:-XX:+PrintGCApplicationStoppedTime" >> $JAVA_ENV_FILE
+        echo "8:-Xloggc:$LOG_DIR/gc.log" >> $JAVA_ENV_FILE
+        echo "8:-XX:+UseGCLogFileRotation" >> $JAVA_ENV_FILE
+        echo "8:-XX:NumberOfGCLogFiles=32" >> $JAVA_ENV_FILE
+        echo "8:-XX:GCLogFileSize=64m" >> $JAVA_ENV_FILE
+    fi
+
+    if [[ "$JAVA_VERSION" =~ ^1.9.* ]]; then
+        echo "# JDK 9+ GC logging" >> $JAVA_ENV_FILE
+        echo "9-:-Xlog:gc*,gc+age=trace,safepoint:file=$LOG_DIR/gc.log:utctime,pid,tags:filecount=32,filesize=64m" >> $JAVA_ENV_FILE
+        echo "# due to internationalization enhancements in JDK 9 Elasticsearch need to set the provider to COMPAT otherwise" >> $JAVA_ENV_FILE
+        echo "# time/date parsing will break in an incompatible way for some date patterns and locals" >> $JAVA_ENV_FILE
+        echo "9-:-Djava.locale.providers=COMPAT" >> $JAVA_ENV_FILE
+    fi
 }
 
 function create_log_props() {
-    LOGGER_PROPS_FILE="$CONF_DIR/log4j2.properties"
-
     if [ ! -d $LOG_DIR  ]; then
         mkdir -p $LOG_DIR
     fi
@@ -150,13 +328,24 @@ function start() {
         exit 1
     fi
 
-    create_config \
+    run sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' $BASE_DIR/bin/elasticsearch-env
+
+    sysctl -w vm.swappiness=0
+    sysctl -w vm.max_map_count=655350
+    sysctl -p
+
+    ulimit -l unlimited
+    ulimit -m unlimited
+
+    ulimit -a
+
+    run create_config \
     && create_jvm_props \
     && create_log_props \
     && create_data_dirs
 
     echo "Staring elasticsearch."
-    exec /usr/local/elasticsearch/bin/elasticsearch
+    run exec $BASE_DIR/bin/elasticsearch
 }
 
 function healthcheck() {
@@ -183,25 +372,25 @@ function usage() {
 echo "\
 Usage: elasticsearch start [OPTIONS]
 Start a Elasticsearch server based on the supplied options.
-    --cluster_name                  Use a descriptive name for your cluster. The default 
+    --cluster_name                  Use a descriptive name for cluster. The default 
                                     value is "$CLUSTER_NAME".
 
-    --node_name                     Use a descriptive name for the node. The default is "$NODE_NAME".
+    --node_name_prefix              Use a descriptive the prefix of name for the node.
+                                    The default is "$NODE_NAME_PREFIX".
 
     --network_host                  Set the bind address to a specific IP (IPv4 or IPv6).
-                                    The default is "$HOST". 
+                                    The default is "$IP". 
 
     --http_port                     Set a custom port for HTTP. The default is "$HTTP_PORT". 
 
     --data_dir                      Path to directory where to store the data.
                                     The default is "$DATA_DIR".
 
-    --discovery_hosts               Pass an initial list of hosts to perform discovery 
-                                    when new node is started. The default is "$CLIENT_PORT".
+    --discovery_seed_hosts          Pass an initial list of hosts to perform discovery 
+                                    when this node is started. The default is "$DISCOVERY_SEED_HOSTS".
 
-    --minimun_master_nodes          Prevent the \"split brain\" by configuring 
-                                    the majority of nodes (total number of master-eligible nodes / 2 + 1).
-                                    The default is "$MINIMUN_MASTER_NODES".
+    --cluster_initial_master_nodes  Bootstrap the cluster using an initial set of master-eligible nodes.
+                                    The default is "$CLUSTER_INITIAL_MASTER_NODES".
 
     --gateway_recover_after_nodes   Block initial recovery after a full cluster restart until N nodes are started. The default is "$GATEWAY_RECOVER_AFTER_NODES".
 
@@ -211,9 +400,6 @@ Start a Elasticsearch server based on the supplied options.
 
     --log_dir                       The log directory for the elasticsearch server. 
                                     The default is "$LOG_DIR".
-
-    --log_level                     The log level for the elasticsearch server. Either FATAL,
-                                    ERROR, WARN, INFO, DEBUG. The default is "$LOG_LEVEL".
 "
     elif [ "$COMMAND" = "healthcheck" ]; then
 echo "\
@@ -254,11 +440,11 @@ if [ $COMMAND = "start" ]; then
                     cluster_name=*)
                         CLUSTER_NAME=${OPTARG##*=}
                         ;;
-                    node_name=*)
-                        NODE_NAME=${OPTARG##*=}
+                    node_name_prefix=*)
+                        NODE_NAME_PREFIX=${OPTARG##*=}
                         ;;
                     network_host=*)
-                        HOST=${OPTARG##*=}
+                        NETWORK_HOST=${OPTARG##*=}
                         ;;
                     http_port=*)
                         HTTP_PORT=${OPTARG##*=}
@@ -273,18 +459,11 @@ if [ $COMMAND = "start" ]; then
                     data_dir=*)
                         DATA_DIR=${OPTARG##*=}
                         ;;
-                    discovery_hosts=*)
-                        DISCOVERY_HOSTS=${OPTARG##*=}
+                    discovery_seed_hosts=*)
+                        DISCOVERY_SEED_HOSTS=${OPTARG##*=}
                         ;;
-                    minimun_master_nodes=*)
-                        MINIMUN_MASTER_NODES=${OPTARG##*=}
-
-                        if [[ "$MINIMUN_MASTER_NODES" =~ ^[0-9]+$ ]]; then
-                            MINIMUN_MASTER_NODES=$MINIMUN_MASTER_NODES
-                        else
-                            usage "$COMMAND" "Minimun master nodes number is required when using the $1 option!"
-                            exit 1
-                        fi
+                    cluster_initial_master_nodes=*)
+                        CLUSTER_INITIAL_MASTER_NODES=${OPTARG##*=}
                         ;;
                     gateway_recover_after_nodes=*)
                         GATEWAY_RECOVER_AFTER_NODES=${OPTARG##*=}
@@ -301,9 +480,6 @@ if [ $COMMAND = "start" ]; then
                         ;;
                     log_dir=*)
                         LOG_DIR=${OPTARG##*=}
-                        ;;
-                    log_level=*)
-                        LOG_LEVEL=${OPTARG##*=}
                         ;;
                     help)
                         usage "$COMMAND"
