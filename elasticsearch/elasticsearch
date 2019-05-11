@@ -8,31 +8,29 @@ DOMAIN=`hostname -d`
 IP=`hostname -i`
 
 BASE_DIR="/usr/local/elasticsearch"
-CONF_DIR=$BASE_DIR"/config"
+CONF_DIR=${BASE_DIR}"/config"
 DATA_DIR="/data/elasticsearch"
 LOG_DIR="/var/log/elasticsearch"
 CLUSTER_NAME="elasticsearch-cluster"
 NODE_NAME_PREFIX="elasticsearch-node"
-NODE_NAME="$NODE_NAME_PREFIX-1"
-NETWORK_HOST=$IP
+NODE_NAME=${NODE_NAME_PREFIX}"-1"
+NETWORK_HOST=${IP}
 HTTP_PORT=9200
 DISCOVERY_SEED_HOSTS='"127.0.0.1", "[::1]"'
-CLUSTER_INITIAL_MASTER_NODES="$NODE_NAME_PREFIX-1"
+CLUSTER_INITIAL_MASTER_NODES=${NODE_NAME}
 GATEWAY_RECOVER_AFTER_NODES=3
-ES_TMPDIR=$TMPDIR
+ES_TMPDIR=${TMPDIR}
 HEAP="2G"
 
 JAVA_VERSION=`java -version 2>&1 | awk 'NR==1{ gsub(/"/,""); print $3 }'`
 
 function run() {
-  if [[ "$(id -u)" == "0" ]]; then
-    # If running as root, drop to specified UID and run command
-    exec su - 10001 "${@}"
-  else
-    # Either we are running in Openshift with random uid and are a member of the root group
-    # or with a custom --user
-    exec "${@}"
-  fi
+    if [[ "$(id -u)" == "0" ]]; then
+        # If running as root, drop to specified UID and run command
+        set -- su-exec elasticsearch "$@"
+    fi
+
+    exec "$@"
 }
 
 function create_config() {
@@ -144,6 +142,8 @@ function create_config() {
     echo "#" >> $CONFIG_FILE
     echo "action.destructive_requires_name: true" >> $CONFIG_FILE
 
+    chown elasticsearch:elasticsearch $CONFIG_FILE
+
     cat $CONFIG_FILE >&2
 }
 
@@ -151,6 +151,8 @@ function create_data_dirs() {
     if [ ! -d $DATA_DIR  ]; then
         mkdir -p $DATA_DIR
     fi
+
+    chown elasticsearch:elasticsearch $DATA_DIR
 }
 
 function create_jvm_props() {
@@ -309,12 +311,16 @@ function create_jvm_props() {
         echo "# time/date parsing will break in an incompatible way for some date patterns and locals" >> $JAVA_ENV_FILE
         echo "9-:-Djava.locale.providers=COMPAT" >> $JAVA_ENV_FILE
     fi
+
+    chown elasticsearch:elasticsearch $JAVA_ENV_FILE
 }
 
 function create_log_props() {
     if [ ! -d $LOG_DIR  ]; then
         mkdir -p $LOG_DIR
     fi
+
+    chown elasticsearch:elasticsearch $LOG_DIR
 }
 
 function start() {
@@ -328,8 +334,6 @@ function start() {
         exit 1
     fi
 
-    run sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' $BASE_DIR/bin/elasticsearch-env
-
     sysctl -w vm.swappiness=0
     sysctl -w vm.max_map_count=655350
     sysctl -p
@@ -337,15 +341,13 @@ function start() {
     ulimit -l unlimited
     ulimit -m unlimited
 
-    ulimit -a
-
-    run create_config \
+    create_config \
     && create_jvm_props \
     && create_log_props \
-    && create_data_dirs
+    && create_data_dirs \
 
     echo "Staring elasticsearch."
-    run exec $BASE_DIR/bin/elasticsearch
+    run $BASE_DIR/bin/elasticsearch
 }
 
 function healthcheck() {

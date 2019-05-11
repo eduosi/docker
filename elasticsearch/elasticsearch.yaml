@@ -1,0 +1,143 @@
+apiVersion: apps/v1beta1 
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+spec:
+  serviceName: elasticsearch-ha
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  template: 
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - elasticsearch
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: elasticsearch
+          image: "reg.omtech.cn/omtech/elasticsearch:latest"
+          command:
+            - "sh"
+            - "-c"
+            - "elasticsearch \
+              start \
+              --cluster_name=elasticsearch-cluster \
+              --node_name_prefix=elasticsearch-node- \
+              --network_host=0.0.0.0 \
+              --http_port=9200 \
+              --data_dir=/data/elasticsearch \
+              --discovery_seed_hosts=elasticsearch-0.elasticsearch-ha.service.svc.cluster.local,elasticsearch-1.elasticsearch-ha.service.svc.cluster.local \
+              --cluster_initial_master_nodes=elasticsearch-node-1,elasticsearch-node-2 \
+              --gateway_recover_after_nodes=2 \
+              --heap=2G \
+              --log_dir=/var/log/elasticsearch"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: server
+          resources:
+            requests:
+              memory: 2Gi
+              cpu: 500m
+          securityContext:
+            privileged: true
+          livenessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "elasticsearch healthcheck --port=9200"
+            initialDelaySeconds: 180
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "elasticsearch healthcheck --port=9200"
+            initialDelaySeconds: 180
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+        - name: data
+          hostPath:
+            path: /data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-ha
+  labels:
+    name: elasticsearch
+spec:
+  ports:
+    - name: server
+      port: 9300
+      targetPort: 9300
+  clusterIP: None
+  selector:
+    app: elasticsearch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  labels:
+    name: elasticsearch
+spec:
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+  selector:
+    app: elasticsearch
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: elasticsearch-pdb
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  maxUnavailable: 1
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: rmt-vote
+  namespace: rmt
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: server.es
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: elasticsearch
+          servicePort: 80

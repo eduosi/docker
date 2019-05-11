@@ -22,10 +22,7 @@ RUN chown -fR elasticsearch:elasticsearch /usr/local/elasticsearch \
 	&& chown elasticsearch:elasticsearch /data \
 	&& mkdir -p /var/log/elasticsearch	\
 	&& chown -fR elasticsearch:elasticsearch /var/log/elasticsearch \
-	&& echo "vm.swappiness=0" >> /etc/sysctl.d/00-alpine.conf \
-	&& echo "vm.max_map_count=655350" >> /etc/sysctl.d/00-alpine.conf \
-	&& echo "ulimit -l unlimited" >> /etc/profile \
-	&& echo "ulimit -m unlimited" >> /etc/profile
+	&& sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' /usr/local/elasticsearch/bin/elasticsearch-env
 
 VOLUME /data
 

@@ -12,7 +12,7 @@ docker tag eduosi/elasticsearch:latest eduosi/elasticsearch:latest
 docker tag omtech/elasticsearch:$ELASTICSEARCH_VERSION reg.omtech.cn/omtech/elasticsearch:$ELASTICSEARCH_VERSION
 docker tag omtech/elasticsearch:latest reg.omtech.cn/omtech/elasticsearch:latest
 
-#docker push eduosi/elasticsearch:$ELASTICSEARCH_VERSION
-#docker push eduosi/elasticsearch:latest
+docker push eduosi/elasticsearch:$ELASTICSEARCH_VERSION
+docker push eduosi/elasticsearch:latest
 docker push reg.omtech.cn/omtech/elasticsearch:$ELASTICSEARCH_VERSION
 docker push reg.omtech.cn/omtech/elasticsearch:latest

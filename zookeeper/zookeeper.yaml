@@ -96,20 +96,6 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: zookeeper
-  labels:
-    name: zookeeper
-spec:
-  ports:
-    - name: client
-      port: 2181
-      targetPort: 2181
-  selector:
-    app: zookeeper
----
-apiVersion: v1
-kind: Service
-metadata:
   name: zookeeper-ha
   labels:
     name: zookeeper
@@ -124,6 +110,20 @@ spec:
       port: 3888
       targetPort: 3888
   clusterIP: None
+  selector:
+    app: zookeeper
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  labels:
+    name: zookeeper
+spec:
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
   selector:
     app: zookeeper
 ---
