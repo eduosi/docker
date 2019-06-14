@@ -26,7 +26,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: kafka
-          image: "reg.omtech.cn/omtech/kafka:latest"
+          image: "eduosi/kafka:latest"
           command:
             - "sh"
             - "-c"
@@ -49,7 +49,7 @@ spec:
               --log_flush_interval_messages=10000 \
               --log_flush_interval=1000 \
               --log_retention_hours=168 \
-              --zookeeper=zookeeper-0.zookeeper-ha.cditv.svc.cluster.local:2181,zookeeper-1.zookeeper-ha.cditv.svc.cluster.local:2181,zookeeper-2.zookeeper-ha.cditv.svc.cluster.local:2181 \
+              --zookeeper=zookeeper-0.zookeeper-ha.serivce.svc.cluster.local:2181,zookeeper-1.zookeeper-ha.serivce.svc.cluster.local:2181,zookeeper-2.zookeeper-ha.serivce.svc.cluster.local:2181 \
               --zookeeper_connect_timeout=6000 \
               --log_level=INFO"
           ports:

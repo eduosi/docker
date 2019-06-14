@@ -29,7 +29,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: elasticsearch
-          image: "reg.omtech.cn/omtech/elasticsearch:latest"
+          image: "eduosi/elasticsearch:latest"
           command:
             - "sh"
             - "-c"

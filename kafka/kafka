@@ -233,7 +233,7 @@ function create_log_props() {
 function start() {
     CONFIG_FILE="$CONF_DIR/server.properties"
 
-    if [ "x$BROKER_ID" = "x"]; then
+    if [ "$BROKER_ID" == "auto" ]; then
         if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
             NAME=${BASH_REMATCH[1]}
             ORD=${BASH_REMATCH[2]}
