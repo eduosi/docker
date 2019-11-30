@@ -1,0 +1,59 @@
+version: "2"
+services:
+  consul-cluster-master-1:
+    image: consul
+    restart: always
+    container_name: consul-cluster-master-1
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.11
+    environment:
+      CONSUL_LOCAL_CONFIG: '{"skip_leave_on_interrupt": true}'
+    command: agent -node=consul-cluster-master-1 -server -bootstrap-expect=3 -bind=0.0.0.0 -client=0.0.0.0 -datacenter=datacenter -retry-join=consul-cluster-master-2 -retry-join=consul-cluster-master3 -disable-host-node-id -log-level=warn
+  consul-cluster-master-2:
+    image: consul
+    restart: always
+    container_name: consul-cluster-master-2
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.12
+    environment:
+      CONSUL_LOCAL_CONFIG: '{"skip_leave_on_interrupt": true}'
+    command: agent -node=consul-cluster-master-2 -server -bootstrap-expect=3 -bind=0.0.0.0 -client=0.0.0.0 -datacenter=datacenter -retry-join=consul-cluster-master-1 -retry-join=consul-cluster-master3 -disable-host-node-id -log-level=warn
+  consul-cluster-master-3:
+    image: consul
+    restart: always
+    container_name: consul-cluster-master-3
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.13
+    environment:
+      CONSUL_LOCAL_CONFIG: '{"skip_leave_on_interrupt": true}'
+    command: agent -node=consul-cluster-master-3 -server -bootstrap-expect=3 -bind=0.0.0.0 -client=0.0.0.0 -datacenter=datacenter -retry-join=consul-cluster-master-1 -retry-join=consul-cluster-master2 -disable-host-node-id -log-level=warn
+  consul-cluster-node-1:
+    image: consul
+    restart: always
+    container_name: consul-cluster-node-1
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.21
+    environment:
+      CONSUL_LOCAL_CONFIG: '{"skip_leave_on_interrupt": true}'
+    command: agent -node=consul-cluster-node-1 -bind=0.0.0.0 -client=0.0.0.0 -datacenter=datacenter -ui -retry-join=consul-cluster-master-1 -retry-join=consul-cluster-master-2 -retry-join=consul-cluster-master3 -disable-host-node-id -log-level=warn
+    ports:
+      - 18500:8500
+  consul-cluster-node-2:
+    image: consul
+    restart: always
+    container_name: consul-cluster-node-2
+    networks:
+      static_network:
+        ipv4_address: 172.19.0.22
+    environment:
+      CONSUL_LOCAL_CONFIG: '{"skip_leave_on_interrupt": true}'
+    command: agent -node=consul-cluster-node-2 -bind=0.0.0.0 -client=0.0.0.0 -datacenter=datacenter -ui -retry-join=consul-cluster-master-1 -retry-join=consul-cluster-master-2 -retry-join=consul-cluster-master3 -disable-host-node-id -log-level=warn
+    ports:
+      - 28500:8500
+networks:
+  static_network:
+    external: true

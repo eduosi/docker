@@ -1,0 +1,293 @@
+master:
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: consul-cluster-master
+spec:
+  serviceName: consul-cluster-master
+  replicas: 3
+  selector:
+    matchLabels:
+      app: consul-cluster-master
+  template: 
+    metadata:
+      labels:
+        app: consul-cluster-master
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - consul-cluster-master
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: consul-cluster-master
+        image: "consul:latest"
+        args:
+          - "agent"
+          - "-server"
+          - "-bootstrap-expect=3"
+          - "-data-dir=/consul/data"
+          - "-bind=0.0.0.0"
+          - "-client=0.0.0.0"
+          - "-datacenter=datacenter"
+          - "-advertise=$(POD_IP)"
+          - "-retry-join=consul-cluster-master-0.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-retry-join=consul-cluster-master-1.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-retry-join=consul-cluster-master-2.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-domain=kn.net"
+          - "-disable-host-node-id"
+        volumeMounts:
+            - name: data
+              mountPath: /consul/data
+        env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: CONSUL_LOCAL_CONFIG
+              value: '{"skip_leave_on_interrupt": true}'
+        ports:
+            - containerPort: 8500
+              name: ui-port
+            - containerPort: 8400
+              name: alt-port
+            - containerPort: 53
+              name: udp-port
+            - containerPort: 8443
+              name: https-port
+            - containerPort: 8080
+              name: http-port
+            - containerPort: 8301
+              name: serflan
+            - containerPort: 8302
+              name: serfwan
+            - containerPort: 8600
+              name: consuldns
+            - containerPort: 8300
+              name: server
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consul-cluster-master
+  labels:
+    name: consul-cluster-master
+spec:
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500
+    - name: https
+      port: 8443
+      targetPort: 8443
+    - name: rpc
+      port: 8400
+      targetPort: 8400
+    - name: serflan-tcp
+      protocol: "TCP"
+      port: 8301
+      targetPort: 8301
+    - name: serflan-udp
+      protocol: "UDP"
+      port: 8301
+      targetPort: 8301
+    - name: serfwan-tcp
+      protocol: "TCP"
+      port: 8302
+      targetPort: 8302
+    - name: serfwan-udp
+      protocol: "UDP"
+      port: 8302
+      targetPort: 8302
+    - name: server
+      port: 8300
+      targetPort: 8300
+    - name: consuldns
+      port: 8600
+      targetPort: 8600
+  selector:
+    app: consul-cluster-master
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: consul-cluster-master-pdb
+spec:
+  selector:
+    matchLabels:
+      app: consul-cluster-master
+  maxUnavailable: 1
+
+
+
+node:
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: consul-cluster-node
+spec:
+  serviceName: consul-cluster-node
+  replicas: 2
+  selector:
+    matchLabels:
+      app: consul-cluster-node
+  template: 
+    metadata:
+      labels:
+        app: consul-cluster-node
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - consul-cluster-node
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: consul-cluster-node
+        image: "consul:latest"
+        args:
+          - "agent"
+          - "-ui"
+          - "-data-dir=/consul/data"
+          - "-bind=0.0.0.0"
+          - "-client=0.0.0.0"
+          - "-datacenter=datacenter"
+          - "-advertise=$(POD_IP)"
+          - "-retry-join=consul-cluster-master-0.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-retry-join=consul-cluster-master-1.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-retry-join=consul-cluster-master-2.consul-cluster-master.$(NAMESPACE).svc.kn.net."
+          - "-domain=kn.net"
+          - "-disable-host-node-id"
+          - "-log-level=warn"
+        volumeMounts:
+            - name: data
+              mountPath: /consul/data
+        env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: CONSUL_LOCAL_CONFIG
+              value: '{"skip_leave_on_interrupt": true}'
+        ports:
+            - containerPort: 8500
+              name: ui-port
+            - containerPort: 8400
+              name: alt-port
+            - containerPort: 53
+              name: udp-port
+            - containerPort: 8443
+              name: https-port
+            - containerPort: 8080
+              name: http-port
+            - containerPort: 8301
+              name: serflan
+            - containerPort: 8302
+              name: serfwan
+            - containerPort: 8600
+              name: consuldns
+            - containerPort: 8300
+              name: server
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consul-cluster-node
+  labels:
+    name: consul-cluster-node
+spec:
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500
+    - name: https
+      port: 8443
+      targetPort: 8443
+    - name: rpc
+      port: 8400
+      targetPort: 8400
+    - name: serflan-tcp
+      protocol: "TCP"
+      port: 8301
+      targetPort: 8301
+    - name: serflan-udp
+      protocol: "UDP"
+      port: 8301
+      targetPort: 8301
+    - name: serfwan-tcp
+      protocol: "TCP"
+      port: 8302
+      targetPort: 8302
+    - name: serfwan-udp
+      protocol: "UDP"
+      port: 8302
+      targetPort: 8302
+    - name: server
+      port: 8300
+      targetPort: 8300
+    - name: consuldns
+      port: 8600
+      targetPort: 8600
+  selector:
+    app: consul-cluster-node
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: consul-cluster-node-pdb
+spec:
+  selector:
+    matchLabels:
+      app: consul-cluster-node
+  maxUnavailable: 1
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: consul-cluster-http
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: discovery.cloud.liangvi.net
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: consul-cluster-node
+          servicePort: 8500
