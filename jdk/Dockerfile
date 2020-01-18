@@ -1,5 +1,5 @@
 # base image
-FROM alpine:3.9
+FROM alpine:3.9.4
 
 # maintainer
 MAINTAINER Yong.Teng eduosi@163.com
@@ -9,9 +9,9 @@ ENV JAVA_HOME=/usr/local/jdk
 ENV PATH=${PATH}:${JAVA_HOME}/bin
 
 COPY glibc-2.29 ./glibc-2.29
-COPY jdk-11.0.3 usr/local/jdk
+COPY zulu-11-azure-jre_11.31.11-11.0.3-linux_musl_x64 usr/local/jdk
 
-RUN set -x \
+RUN set -eux \
 	&& echo "http://mirrors.aliyun.com/alpine/v3.9/main" > /etc/apk/repositories	\
 	&& echo "http://mirrors.aliyun.com/alpine/v3.9/community" >> /etc/apk/repositories \
 	&& apk update \

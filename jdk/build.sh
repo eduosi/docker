@@ -10,3 +10,6 @@ docker tag eduosi/jdk:latest eduosi/jdk:latest
 
 docker push eduosi/jdk:$JDK_VERSION
 docker push eduosi/jdk:latest
+
+docker tag eduosi/jdk:$JDK_VERSION reg.omtech.cn/omtech/jdk:$JDK_VERSION
+docker tag eduosi/jdk:latest reg.omtech.cn/omtech/jdk:latest

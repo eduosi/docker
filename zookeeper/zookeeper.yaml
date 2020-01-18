@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1 
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: zookeeper
@@ -30,6 +30,9 @@ spec:
       containers:
         - name: zookeeper
           image: "eduosi/zookeeper:latest"
+          volumeMounts:
+            - name: data
+              mountPath: /data/zookeeper
           command:
             - "sh"
             - "-c"
@@ -50,8 +53,8 @@ spec:
               --purge_interval=12 \
               --max_session_timeout=40000 \
               --min_session_timeout=4000 \
-              --heap=512M \
-              --log_level=INFO"
+              --heap=256M \
+              --log_level=ERROR"
           ports:
             - containerPort: 2181
               name: client
@@ -61,37 +64,28 @@ spec:
               name: leader-election
           resources:
             requests:
-              memory: 1Gi
+              memory: 512Mi
               cpu: 500m
           livenessProbe:
-            exec:
-              command:
-                - "sh"
-                - "-c"
-                - "zookeeper healthcheck --port=2181"
+            tcpSocket:
+              port: 2181
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
             successThreshold: 1
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - "sh"
-                - "-c"
-                - "zookeeper healthcheck --port=2181"
+            tcpSocket:
+              port: 2181
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
             successThreshold: 1
             failureThreshold: 3
-      volumeMounts:
-        - name: data
-          mountPath: /data
       volumes:
         - name: data
           hostPath:
-            path: /data
+            path: /data/zookeeper
 ---
 apiVersion: v1
 kind: Service

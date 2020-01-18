@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TENGINE_VERSION=2.2.3
+TENGINE_VERSION=2.3.1
 
 docker build --force-rm -t eduosi/tengine:$TENGINE_VERSION .
 docker build --force-rm -t eduosi/tengine:latest .

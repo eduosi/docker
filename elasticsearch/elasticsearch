@@ -19,6 +19,8 @@ HTTP_PORT=9200
 DISCOVERY_SEED_HOSTS='"127.0.0.1", "[::1]"'
 CLUSTER_INITIAL_MASTER_NODES=${NODE_NAME}
 GATEWAY_RECOVER_AFTER_NODES=3
+INDEX_SHARDS=1
+INDEX_REPLICAS=0
 ES_TMPDIR=${TMPDIR}
 HEAP="2G"
 
@@ -142,6 +144,17 @@ function create_config() {
     echo "#" >> $CONFIG_FILE
     echo "action.destructive_requires_name: true" >> $CONFIG_FILE
 
+    echo "#" >> $CONFIG_FILE
+    echo "# ---------------------------------- Index -----------------------------------" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# The number of shards for index:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "index.number_of_shards: $INDEX_SHARDS" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "# The number of replicas for index:" >> $CONFIG_FILE
+    echo "#" >> $CONFIG_FILE
+    echo "index.number_of_replicas: $INDEX_REPLICAS" >> $CONFIG_FILE
+
     chown elasticsearch:elasticsearch $CONFIG_FILE
 
     cat $CONFIG_FILE >&2
@@ -150,9 +163,8 @@ function create_config() {
 function create_data_dirs() {
     if [ ! -d $DATA_DIR  ]; then
         mkdir -p $DATA_DIR
+        chown elasticsearch:elasticsearch $DATA_DIR
     fi
-
-    chown elasticsearch:elasticsearch $DATA_DIR
 }
 
 function create_jvm_props() {
@@ -334,13 +346,6 @@ function start() {
         exit 1
     fi
 
-    sysctl -w vm.swappiness=0
-    sysctl -w vm.max_map_count=655350
-    sysctl -p
-
-    ulimit -l unlimited
-    ulimit -m unlimited
-
     create_config \
     && create_jvm_props \
     && create_log_props \
@@ -394,7 +399,12 @@ Start a Elasticsearch server based on the supplied options.
     --cluster_initial_master_nodes  Bootstrap the cluster using an initial set of master-eligible nodes.
                                     The default is "$CLUSTER_INITIAL_MASTER_NODES".
 
-    --gateway_recover_after_nodes   Block initial recovery after a full cluster restart until N nodes are started. The default is "$GATEWAY_RECOVER_AFTER_NODES".
+    --gateway_recover_after_nodes   Block initial recovery after a full cluster restart until N nodes are started.
+                                    The default is "$GATEWAY_RECOVER_AFTER_NODES".
+
+    --index_shards                  The number of shards for index. The default is "$INDEX_SHARDS".
+
+    --index_replicas                The number of replicas for index. The default is "$INDEX_REPLICAS".
 
     --heap                          The maximum amount of heap to use. The format is the 
                                     same as that used for the Xmx and Xms parameters to the 
@@ -476,6 +486,9 @@ if [ $COMMAND = "start" ]; then
                             usage "$COMMAND" "Gateway recover after nodes number is required when using the $1 option!"
                             exit 1
                         fi
+                        ;;
+                    plugins=*)
+                        PLUGINS=${OPTARG##*=}
                         ;;
                     heap=*)
                         HEAP=${OPTARG##*=}

@@ -17,13 +17,17 @@ RUN addgroup -g 10001 -S elasticsearch 2> /dev/null \
 RUN chown -fR elasticsearch:elasticsearch /usr/local/elasticsearch \
 	&& chmod 0755 /usr/local/elasticsearch \
 	&& chown -fR elasticsearch:elasticsearch /usr/sbin/elasticsearch \
-	&& chmod 0755 /usr/sbin/elasticsearch \
+	&& chmod 0700 /usr/sbin/elasticsearch \
 	&& mkdir /data \
 	&& chown elasticsearch:elasticsearch /data \
 	&& mkdir -p /var/log/elasticsearch	\
 	&& chown -fR elasticsearch:elasticsearch /var/log/elasticsearch \
-	&& sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' /usr/local/elasticsearch/bin/elasticsearch-env
+	&& sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' /usr/local/elasticsearch/bin/elasticsearch-env \
+	&& echo 'vm.swappiness = 0' >> /etc/sysctl.d/00-alpine.conf	\
+	&& echo 'vm.max_map_count = 655350' >> /etc/sysctl.d/00-alpine.conf
 
 VOLUME /data
+
+USER elasticsearch
 
 EXPOSE 9200 9300

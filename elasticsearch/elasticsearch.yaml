@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1 
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: elasticsearch
@@ -30,6 +30,9 @@ spec:
       containers:
         - name: elasticsearch
           image: "eduosi/elasticsearch:latest"
+          volumeMounts:
+            - name: data
+              mountPath: /data/elasticsearch
           command:
             - "sh"
             - "-c"
@@ -43,6 +46,8 @@ spec:
               --discovery_seed_hosts=elasticsearch-0.elasticsearch-ha.service.svc.cluster.local,elasticsearch-1.elasticsearch-ha.service.svc.cluster.local \
               --cluster_initial_master_nodes=elasticsearch-node-1,elasticsearch-node-2 \
               --gateway_recover_after_nodes=2 \
+              --index_shards=3 \
+              --index_replicas=2 \
               --heap=2G \
               --log_dir=/var/log/elasticsearch"
           ports:
@@ -78,13 +83,10 @@ spec:
             periodSeconds: 10
             successThreshold: 1
             failureThreshold: 3
-      volumeMounts:
-        - name: data
-          mountPath: /data
       volumes:
         - name: data
           hostPath:
-            path: /data
+            path: /data/elasticsearch
 ---
 apiVersion: v1
 kind: Service
@@ -128,16 +130,15 @@ spec:
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
-  name: rmt-vote
-  namespace: rmt
+  name: elasticsearch
   annotations:
     ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - host: server.es
+  - host: es.cloud.liangvi.net
     http:
       paths:
       - path: /
         backend:
           serviceName: elasticsearch
-          servicePort: 80
+          servicePort: 9200

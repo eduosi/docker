@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1 
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: kafka
@@ -35,6 +35,7 @@ spec:
               --host=0.0.0.0 \
               --port=9092 \
               --advertised_port=9092 \
+              --broker_id=auto \
               --network_threads=4 \
               --io_threads=4 \
               --socket_send_buffer=102400 \
@@ -49,33 +50,28 @@ spec:
               --log_flush_interval_messages=10000 \
               --log_flush_interval=1000 \
               --log_retention_hours=168 \
-              --zookeeper=zookeeper-0.zookeeper-ha.serivce.svc.cluster.local:2181,zookeeper-1.zookeeper-ha.serivce.svc.cluster.local:2181,zookeeper-2.zookeeper-ha.serivce.svc.cluster.local:2181 \
+              --zookeeper=zookeeper-0.zookeeper-ha.liangvi.svc.kn.net:2181,zookeeper-1.zookeeper-ha.liangvi.svc.kn.net:2181,zookeeper-2.zookeeper-ha.liangvi.svc.kn.net:2181 \
               --zookeeper_connect_timeout=6000 \
-              --log_level=INFO"
+              --heap=256M \
+              --log_level=ERROR"
           ports:
             - containerPort: 9092
               name: server
           resources:
             requests:
-              memory: 1Gi
+              memory: 512Mi
               cpu: 500m
           livenessProbe:
-            exec:
-              command:
-                - "sh"
-                - "-c"
-                - "kafka healthcheck --port=9092"
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
             successThreshold: 1
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - "sh"
-                - "-c"
-                - "kafka healthcheck --port=9092"
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
