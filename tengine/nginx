@@ -1,0 +1,165 @@
+#!/bin/bash
+
+set -e
+
+USER=`whoami`
+_GROUPS=`groups "$USER"`
+GROUP=`echo $_GROUPS|awk '{print $1}'`
+
+BASE_DIR="/usr/local/tengine"
+PORT=80
+
+function run() {
+    if [[ "$(id -u)" == "0" ]]; then
+        # If running as root, drop to specified UID and run command
+        set -- su-exec $USER "$@"
+    fi
+
+    exec "$@"
+}
+
+function create_config() {
+    CONFIG_FILE="$BASE_DIR/conf/nginx.conf"
+
+    sed -i "s/\$group/"$GROUP"/g" $CONFIG_FILE
+    sed -i "s/\$user/"$USER"/g" $CONFIG_FILE
+}
+
+function start() {
+    echo "Staring Tengine."
+    create_config
+    run $BASE_DIR/sbin/nginx
+}
+
+function healthcheck() {
+    PORT="$1"
+
+    RESULT=$(echo ruok | nc 127.0.0.1 $PORT)
+    if [ "$RESULT" == "imok" ]; then
+        exit 0
+    else
+        exit 1
+    fi
+}
+
+function usage() {
+    COMMAND="$1"
+
+    ERROR_MSG="$2"
+    
+    if [ "$ERROR_MSG" != "" ]; then
+        echo -e "\nERROR: $ERROR_MSG\n"
+    fi
+
+    if [ "$COMMAND" = "start" ]; then
+echo "\
+Usage: nginx start [OPTIONS]
+Start a Tengine server based on the supplied options.
+    --group                                     The run nginx group. The default value is "$GROUP".
+
+    --user                                      The run nginx user. The default value is "$USER".
+"
+    elif [ "$COMMAND" = "healthcheck" ]; then
+echo "\
+Usage: Tengine healthcheck [OPTIONS]
+Kafka server healthcheck based on the supplied options.
+     --port  The port of server. The default value is "$CLIENT_PORT".
+"
+    else
+        echo "\
+Usage: Tengine COMMAND OPTIONS
+       where COMMAND is one of: start, healthcheck
+
+Pass --help after any COMMAND to see command-specific usage information,
+     such as:    ./nginx start --help or ./nginx healthcheck --help
+"
+fi
+}
+
+if [ $# -gt 0 ]; then
+    COMMAND="$1"
+    shift
+else
+    usage ""
+    exit;
+fi
+
+if [ $COMMAND = "start" ]; then
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    group=*)
+                        GROUP=${OPTARG##*=}
+                        ;;
+                    user=*)
+                        USER=${OPTARG##*=}
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    start
+elif [ $COMMAND = "healthcheck" ]; then
+    if [ $# -eq 0 ]; then
+        usage "$COMMAND"
+        exit
+    fi
+
+    optspec=":hv-:"
+    while getopts "$optspec" optchar; do
+        case "${optchar}" in
+            -)
+                case "${OPTARG}" in
+                    port=*)
+                        PORT=${OPTARG##*=}
+
+                        if [[ "$PORT" =~ ^[0-9]+$ ]]; then
+                            PORT=$PORT
+                        else
+                            usage "$COMMAND" "Port number is required when using the $1 option!"
+                            exit 1
+                        fi
+                        ;;
+                    help)
+                        usage "$COMMAND"
+                        exit
+                        ;;
+                    *)
+                        echo "Unknown option ${optchar} : --${OPTARG}" >&2
+                        exit 1
+                        ;;
+                esac;;
+            h)
+                usage "$COMMAND"
+                exit
+                ;;
+            *)
+                if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                    echo "Non-option argument: '-${OPTARG}'" >&2
+                fi
+                exit;
+                ;;
+        esac
+    done
+
+    healthcheck $PORT
+else
+    usage "" "$COMMAND is not a valid command!"
+    exit 1;
+fi

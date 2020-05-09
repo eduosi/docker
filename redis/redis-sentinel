@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+/usr/local/redis/bin/redis-sentinel /usr/local/redis/etc/sentinel.conf
